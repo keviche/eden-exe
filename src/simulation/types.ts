@@ -1,22 +1,24 @@
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 
+=======
+>>>>>>> e5afd0290edbd060866f11d175a7082dc0b73ce3
 /**
  * EDEN.EXE shared world types
  *
- * Coordinates use a right-handed 3D world:
- * X = left/right
- * Y = up/down
- * Z = forward/back
- *
- * Distances are measured in Three.js world units.
- *
- * Grid positions use integer cell coordinates.
- * Building grid positions refer to the anchor cell
- * at the minimum X/Z corner of their footprint.
+ * Coordinate conventions:
+ * - X = left/right
+ * - Y = vertical
+ * - Z = forward/back
+ * - The usable world surface is flat.
+ * - Grid coordinates are integer cell coordinates.
+ * - The world contains exactly 6 columns and 6 rows.
+ * - Building positions identify the anchor cell at the
+ *   minimum X/Z corner of their footprint.
  *
  * Rotations are measured in radians.
- * Timestamps are Unix milliseconds (Date.now()).
- * Entity IDs must be unique and stable across saves.
+ * Timestamps are Unix milliseconds.
+ * Entity IDs are unique, stable GUIDs.
  */
 
 // --------------------------------------------------
@@ -29,7 +31,12 @@ export type EntityId = string;
 export type ActivityCategory = "productivity" | "leisure" | "idle";
 export type ResidentActivity = "idle" | "walking" | "working" | "socializing" | "resting";
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
+=======
+export type EntityType = "building" | "plant" | "resident";
+
+>>>>>>> e5afd0290edbd060866f11d175a7082dc0b73ce3
 export interface GridPosition {
   x: number;
   z: number;
@@ -43,9 +50,10 @@ export interface WorldPosition {
 
 export type Vector3 = WorldPosition;
 
+// The world always uses a 6x6 grid.
 export interface WorldGrid {
-  width: number;
-  depth: number;
+  readonly width: 6;
+  readonly depth: 6;
   cellSize: number;
   origin: WorldPosition;
 }
@@ -62,13 +70,11 @@ export interface WorldSeed {
 // Activity categories
 // --------------------------------------------------
 
-// What the user is doing on their computer.
 export type ActivityCategory =
   | "productivity"
   | "leisure"
   | "idle";
 
-// What an individual resident is doing in the world.
 export type ResidentActivity =
   | "idle"
   | "walking"
@@ -76,8 +82,6 @@ export type ResidentActivity =
   | "socializing"
   | "resting";
 
-// Tracks accumulated activity points.
-// The simulation determines how points are earned.
 export interface ActivityState {
   category: ActivityCategory;
   productivityPoints: number;
@@ -100,6 +104,10 @@ export interface Building {
   name: string;
 <<<<<<< Updated upstream
 
+  // Unique identifier for the saved procedural appearance.
+  // The same variant can be shared by multiple buildings.
+  variantId: string;
+
   // Anchor cell at the minimum X/Z footprint corner.
   gridPosition: GridPosition;
 
@@ -109,7 +117,9 @@ export interface Building {
     depth: number;
   };
 
+  // Rotation around the vertical Y axis, in radians.
   rotation: number;
+
   createdAt: number;
 }
 
@@ -117,6 +127,10 @@ export interface Plant {
   type: "plant";
   id: EntityId;
   species: string;
+
+  // Saved visual variant for consistent rendering.
+  variantId: string;
+
   gridPosition: GridPosition;
   growth: number;
   createdAt: number;
@@ -134,7 +148,15 @@ export interface Resident {
   type: "resident";
   id: EntityId;
   name: string;
+<<<<<<< HEAD
   position: WorldPosition;
+=======
+
+  // Residents use world coordinates for movement.
+  // Keep their Y position on the flat world surface.
+  position: Vector3;
+
+>>>>>>> e5afd0290edbd060866f11d175a7082dc0b73ce3
   activity: ResidentActivity;
   createdAt: number;
 }
@@ -188,9 +210,13 @@ export interface WorldState {
 
   // Unlocked content and progression.
   progression: ProgressionState;
+<<<<<<< HEAD
 =======
   activity: ActivityCategory;
   lastActiveAt: number;
   progression: { productivitySeconds: number; leisureSeconds: number; idleSeconds: number };
 >>>>>>> Stashed changes
 }
+=======
+}
+>>>>>>> e5afd0290edbd060866f11d175a7082dc0b73ce3
