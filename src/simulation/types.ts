@@ -1,42 +1,94 @@
 
 /**
+ * EDEN.EXE shared world types
+ *
  * Coordinates use a right-handed 3D world:
  * X = left/right
  * Y = up/down
  * Z = forward/back
  *
- * Distances are measured in world units.
- * Entity positions refer to their center unless
- * a particular entity type documents otherwise.
+ * Distances are measured in Three.js world units.
+ *
+ * Grid positions use integer cell coordinates.
+ * Building grid positions refer to the anchor cell
+ * at the minimum X/Z corner of their footprint.
+ *
+ * Rotations are measured in radians.
+ * Timestamps are Unix milliseconds (Date.now()).
+ * Entity IDs must be unique and stable across saves.
  */
+
+// --------------------------------------------------
+// Shared identifiers and coordinates
+// --------------------------------------------------
 
 export type EntityId = string;
 
-// Discrete grid coordinates: whole-number cell positions.
 export interface GridPosition {
   x: number;
   z: number;
 }
 
-// Continuous Three.js coordinates.
 export interface WorldPosition {
   x: number;
   y: number;
   z: number;
 }
 
+export type Vector3 = WorldPosition;
+
 export interface WorldGrid {
-  width: number;       // Number of cells along X
-  depth: number;       // Number of cells along Z
-  cellSize: number;    // World units per cell
+  width: number;
+  depth: number;
+  cellSize: number;
   origin: WorldPosition;
 }
 
+// --------------------------------------------------
+// World generation
+// --------------------------------------------------
+
+export interface WorldSeed {
+  seed: number;
+}
+
+// --------------------------------------------------
+// Activity categories
+// --------------------------------------------------
+
+// What the user is doing on their computer.
+export type ActivityCategory =
+  | "productivity"
+  | "leisure"
+  | "idle";
+
+// What an individual resident is doing in the world.
+export type ResidentActivity =
+  | "idle"
+  | "walking"
+  | "working"
+  | "socializing"
+  | "resting";
+
+// Tracks accumulated activity points.
+// The simulation determines how points are earned.
+export interface ActivityState {
+  category: ActivityCategory;
+  productivityPoints: number;
+  leisurePoints: number;
+  idlePoints: number;
+}
+
+// --------------------------------------------------
+// World entities
+// --------------------------------------------------
+
 export interface Building {
+  type: "building";
   id: EntityId;
   name: string;
 
-  // Location of the building's anchor cell.
+  // Anchor cell at the minimum X/Z footprint corner.
   gridPosition: GridPosition;
 
   // Footprint measured in grid cells.
@@ -45,13 +97,12 @@ export interface Building {
     depth: number;
   };
 
-  // Full 360 degree rotation
   rotation: number;
-
   createdAt: number;
 }
 
 export interface Plant {
+  type: "plant";
   id: EntityId;
   species: string;
   gridPosition: GridPosition;
@@ -59,35 +110,8 @@ export interface Plant {
   createdAt: number;
 }
 
-export interface WorldState {
-  seed: WorldSeed;
-  grid: WorldGrid;
-  buildings: Building[];
-  plants: Plant[];
-  residents: Resident[];
-  weather: Weather;
-  simulationTime: number;
-}
-
-export interface Vector3 {
-  x: number;
-  y: number;
-  z: number;
-}
-
-export type ResidentActivity=
-  | "idle"
-  | "walking"
-  | "working"
-  | "socializing"
-  | "resting";
-
-export type ActivityCategory =
-    | "productivity"
-    | "leisure"
-    | "idle"
-
 export interface Resident {
+  type: "resident";
   id: EntityId;
   name: string;
   position: Vector3;
@@ -95,26 +119,47 @@ export interface Resident {
   createdAt: number;
 }
 
+// Discriminated union of all supported world entities.
+export type WorldEntity = Building | Plant | Resident;
+
+// --------------------------------------------------
+// Weather and simulation
+// --------------------------------------------------
+
 export interface Weather {
   condition: "sunny" | "cloudy" | "rainy" | "stormy";
   updatedAt: number;
 }
 
-export interface WorldSeed {
-  seed: number;
+// --------------------------------------------------
+// Progression
+// --------------------------------------------------
+
+export interface ProgressionState {
+  // Building types that the user has unlocked.
+  unlockedBuildings: string[];
 }
 
-export interface WorldEntity {
-  id: EntityId;
-  type: "building" | "plant" | "resident";
-}
+// --------------------------------------------------
+// Complete world state
+// --------------------------------------------------
 
 export interface WorldState {
   seed: WorldSeed;
   grid: WorldGrid;
+
   buildings: Building[];
   plants: Plant[];
   residents: Resident[];
+
   weather: Weather;
+
+  // Elapsed simulation time in seconds.
   simulationTime: number;
+
+  // Computer activity and earned growth resources.
+  activity: ActivityState;
+
+  // Unlocked content and progression.
+  progression: ProgressionState;
 }

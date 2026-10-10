@@ -4,6 +4,8 @@ import type {
   WorldGrid,
   WorldSeed,
   Weather,
+  ActivityState,
+  ProgressionState,
 } from "./types";
 
 // --------------------------------------------------
@@ -44,6 +46,25 @@ export const DEFAULT_WEATHER: Weather = {
 };
 
 // --------------------------------------------------
+// Activity defaults
+// --------------------------------------------------
+
+export const DEFAULT_ACTIVITY_STATE: ActivityState = {
+  category: "idle",
+  productivityPoints: 0,
+  leisurePoints: 0,
+  idlePoints: 0,
+};
+
+// --------------------------------------------------
+// Progression defaults
+// --------------------------------------------------
+
+export const DEFAULT_PROGRESSION_STATE: ProgressionState = {
+  unlockedBuildings: [],
+};
+
+// --------------------------------------------------
 // Initial world state
 // --------------------------------------------------
 
@@ -58,6 +79,12 @@ export const DEFAULT_WORLD_STATE: WorldState = {
 
   weather: DEFAULT_WEATHER,
 
-  // Elapsed simulation time, measured in simulation seconds.
+  // Elapsed simulation time in seconds.
   simulationTime: 0,
+
+  // Current computer activity and accumulated points.
+  activity: DEFAULT_ACTIVITY_STATE,
+
+  // Unlocked buildings and progression.
+  progression: DEFAULT_PROGRESSION_STATE,
 };
