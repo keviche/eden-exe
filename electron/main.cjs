@@ -1,7 +1,48 @@
-const { app, BrowserWindow, screen } = require("electron");
+const { app, BrowserWindow, screen, ipcMain } = require("electron");
 const path = require("node:path");
+const fs = require("node:fs/promises");
 
 let mainWindow;
+
+
+function getWorldSavePath() {
+  return path.join(app.getPath("userData"), "world.json");
+}
+
+// Load the saved world from disk.
+ipcMain.handle("world:load", async () => {
+  try {
+    const contents = await fs.readFile(getWorldSavePath(), "utf8");
+    return JSON.parse(contents);
+  } catch (error) {
+    // No save file exists yet.
+    if (error.code === "ENOENT") {
+      return null;
+    }
+
+    // Other errors should be visible to the caller.
+    throw error;
+  }
+});
+
+// Save the world to disk.
+ipcMain.handle("world:save", async (_event, world) => {
+  const savePath = getWorldSavePath();
+  const temporaryPath = `${savePath}.tmp`;
+
+  // Write to a temporary file first to reduce the
+  // chance of corrupting the existing save.
+  await fs.writeFile(
+    temporaryPath,
+    JSON.stringify(world, null, 2),
+    "utf8",
+  );
+
+  await fs.rename(temporaryPath, savePath);
+
+  return true;
+});
+
 
 function createWindow() {
   const { workArea } = screen.getPrimaryDisplay();
