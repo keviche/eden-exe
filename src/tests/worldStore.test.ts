@@ -20,6 +20,7 @@ describe("WorldStore", () => {
     const building = {
       type: "building" as const,
       id: "building-1",
+      variantId: "solar-house",
       name: "Solar House",
       gridPosition: { x: 5, z: 10 },
       footprint: { width: 2, depth: 2 },
