@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it } from "vitest";
 import { useWorldStore } from "../state/worldStore";
 
@@ -31,9 +30,7 @@ describe("WorldStore", () => {
     useWorldStore.getState().addBuilding(building);
 
     expect(useWorldStore.getState().world.buildings).toHaveLength(1);
-    expect(useWorldStore.getState().world.buildings[0].name).toBe(
-      "Solar House",
-    );
+    expect(useWorldStore.getState().world.buildings[0].name).toBe("Solar House");
 
     useWorldStore.getState().removeBuilding("building-1");
 
@@ -60,9 +57,7 @@ describe("WorldStore", () => {
     store.unlockBuilding("solar-house");
     store.unlockBuilding("solar-house");
 
-    expect(
-      useWorldStore.getState().world.progression.unlockedBuildings,
-    ).toEqual(["solar-house"]);
+    expect(useWorldStore.getState().world.progression.unlockedBuildings).toEqual(["solar-house"]);
   });
 
   it("advances simulation time", () => {

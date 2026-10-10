@@ -1,4 +1,3 @@
-
 import type { WorldState } from "./simulation/types";
 
 declare global {

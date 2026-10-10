@@ -1,6 +1,6 @@
 # EDEN.EXE
 
-EDEN.EXE is a lightweight desktop companion featuring a growing 3D miniature world that responds to computer activity. It is a background application that tracks what the user is doing and modifies a small solar punk/frutiger aero city depending on user action. It will be a small window that sits in the bottom right corner of your screen and is 3D. Should shift between day and night cycle. Likely 3 sections that different user actions will fit into, these being productivity, leisure, and no input at all. Each one will correspond to either the city growing, people reproducing, or the plant life expanding. 
+EDEN.EXE is a lightweight desktop companion featuring a growing 3D miniature world that responds to computer activity. It is a background application that tracks what the user is doing and modifies a small solar punk/frutiger aero city depending on user action. It will be a small window that sits in the bottom right corner of your screen and is 3D. Should shift between day and night cycle. Likely 3 sections that different user actions will fit into, these being productivity, leisure, and no input at all. Each one will correspond to either the city growing, people reproducing, or the plant life expanding.
 
 Built with Electron, React, TypeScript, Vite, Three.js, React Three Fiber, Drei, and Zustand.
 

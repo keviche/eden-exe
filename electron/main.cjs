@@ -4,7 +4,6 @@ const fs = require("node:fs/promises");
 
 let mainWindow;
 
-
 function getWorldSavePath() {
   return path.join(app.getPath("userData"), "world.json");
 }
@@ -32,17 +31,12 @@ ipcMain.handle("world:save", async (_event, world) => {
 
   // Write to a temporary file first to reduce the
   // chance of corrupting the existing save.
-  await fs.writeFile(
-    temporaryPath,
-    JSON.stringify(world, null, 2),
-    "utf8",
-  );
+  await fs.writeFile(temporaryPath, JSON.stringify(world, null, 2), "utf8");
 
   await fs.rename(temporaryPath, savePath);
 
   return true;
 });
-
 
 function createWindow() {
   const { workArea } = screen.getPrimaryDisplay();
