@@ -75,18 +75,23 @@ export interface Vector3 {
   z: number;
 }
 
-export type ActivityCategory =
+export type ResidentActivity=
   | "idle"
   | "walking"
   | "working"
   | "socializing"
   | "resting";
 
+export type ActivityCategory =
+    | "productivity"
+    | "leisure"
+    | "idle"
+
 export interface Resident {
   id: EntityId;
   name: string;
   position: Vector3;
-  activity: ActivityCategory;
+  activity: ResidentActivity;
   createdAt: number;
 }
 

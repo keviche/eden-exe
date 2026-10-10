@@ -1,32 +1,100 @@
-# React + TypeScript + Vite
+# EDEN.EXE
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+EDEN.EXE is a lightweight desktop companion featuring a growing 3D miniature world that responds to computer activity.
 
-Currently, two official plugins are available:
+Built with Electron, React, TypeScript, Vite, Three.js, React Three Fiber, Drei, and Zustand.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Prerequisites
 
-## React Compiler
+- macOS (primary development platform)
+- Git
+- Node.js 24.21.0 (specified in `.nvmrc`)
+- npm 12.2.0 (recommended)
+- nvm (recommended for managing Node.js versions)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Getting Started
 
-## Expanding the Oxlint configuration
+Clone the repository:
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+git clone https://github.com/keviche/eden-exe.git
+cd eden-exe
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Set up Node.js:
+
+```bash
+nvm install
+nvm use
+npm install -g npm@12.2.0
+```
+
+Install dependencies:
+
+```bash
+npm ci
+```
+
+Launch the Electron desktop application:
+
+```bash
+npm run dev:desktop
+```
+
+A transparent Electron window should appear near the bottom-left of your desktop.
+
+Press `Ctrl + C` in Terminal to stop the application.
+
+## Development Commands
+
+| Command                | Description                 |
+| ---------------------- | --------------------------- |
+| `npm run dev:desktop`  | Start Vite and Electron     |
+| `npm run dev`          | Start Vite in the browser   |
+| `npm run typecheck`    | Check TypeScript types      |
+| `npm run lint`         | Run Oxlint                  |
+| `npm run format`       | Format files using Prettier |
+| `npm run format:check` | Check formatting            |
+| `npm test`             | Run Vitest tests            |
+| `npm run build`        | Build the React frontend    |
+
+## Project Structure
+
+```text
+electron/       Electron main process and preload
+src/            React application
+src/tests/      Automated tests
+public/         Static assets
+```
+
+## Architecture
+
+- **Electron:** Desktop window, lifecycle, and operating-system integration
+- **React:** User interface
+- **React Three Fiber / Three.js:** 3D world rendering
+- **Zustand:** Shared world and simulation state
+- **Simulation:** Activity-driven world progression (planned)
+
+The Electron main process communicates with the renderer through a controlled IPC interface. The renderer owns the Zustand store.
+
+## Contributing
+
+Create a feature branch before implementing a ticket:
+
+```bash
+git switch -c feature/your-feature
+```
+
+Commit and push your work:
+
+```bash
+git add .
+git commit -m "Describe your changes"
+git push -u origin feature/your-feature
+```
+
+Open a pull request targeting `main` for review.
+
+## Current Status
+
+The transparent Electron desktop scaffold is working. Procedural world generation, activity monitoring, simulation, persistence, and the shared world store are upcoming development tasks.
