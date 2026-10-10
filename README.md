@@ -41,7 +41,7 @@ Launch the Electron desktop application:
 npm run dev:desktop
 ```
 
-A transparent Electron window should appear near the bottom-left of your desktop.
+A transparent Electron window should appear near the bottom-right of your desktop.
 
 Press `Ctrl + C` in Terminal to stop the application.
 
@@ -73,7 +73,7 @@ public/         Static assets
 - **React:** User interface
 - **React Three Fiber / Three.js:** 3D world rendering
 - **Zustand:** Shared world and simulation state
-- **Simulation:** Activity-driven world progression (planned)
+- **Simulation:** Activity-driven world progression and local persistence
 
 The Electron main process communicates with the renderer through a controlled IPC interface. The renderer owns the Zustand store.
 
@@ -97,4 +97,6 @@ Open a pull request targeting `main` for review.
 
 ## Current Status
 
-The transparent Electron desktop scaffold is working. Procedural world generation, activity monitoring, simulation, persistence, and the shared world store are upcoming development tasks.
+The initial version renders a small 3D world with procedural buildings, plants, and residents. Its Zustand store persists progression in browser storage. Keyboard and pointer input count as active use; after 60 seconds without input, the world enters idle mode. Use **Alt+1** for productivity, **Alt+2** for leisure, and **Alt+3** for idle. Productivity adds buildings, leisure adds residents, and idle time expands plant life.
+
+The app does not inspect other applications, so active use is not automatically classified as productivity or leisure. The activity shortcuts provide that classification for now.

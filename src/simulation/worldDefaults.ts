@@ -81,10 +81,16 @@ export const DEFAULT_WORLD_STATE: WorldState = {
 
   // Elapsed simulation time in seconds.
   simulationTime: 0,
+<<<<<<< Updated upstream
 
   // Current computer activity and accumulated points.
   activity: DEFAULT_ACTIVITY_STATE,
 
   // Unlocked buildings and progression.
   progression: DEFAULT_PROGRESSION_STATE,
+=======
+  activity: "idle",
+  lastActiveAt: Date.now(),
+  progression: { productivitySeconds: 0, leisureSeconds: 0, idleSeconds: 0 },
+>>>>>>> Stashed changes
 };

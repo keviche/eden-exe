@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 
 /**
  * EDEN.EXE shared world types
@@ -22,8 +23,13 @@
 // Shared identifiers and coordinates
 // --------------------------------------------------
 
+=======
+>>>>>>> Stashed changes
 export type EntityId = string;
+export type ActivityCategory = "productivity" | "leisure" | "idle";
+export type ResidentActivity = "idle" | "walking" | "working" | "socializing" | "resting";
 
+<<<<<<< Updated upstream
 export interface GridPosition {
   x: number;
   z: number;
@@ -83,10 +89,16 @@ export interface ActivityState {
 // World entities
 // --------------------------------------------------
 
+=======
+export interface GridPosition { x: number; z: number }
+export interface WorldPosition { x: number; y: number; z: number }
+export interface WorldGrid { width: number; depth: number; cellSize: number; origin: WorldPosition }
+>>>>>>> Stashed changes
 export interface Building {
   type: "building";
   id: EntityId;
   name: string;
+<<<<<<< Updated upstream
 
   // Anchor cell at the minimum X/Z footprint corner.
   gridPosition: GridPosition;
@@ -110,14 +122,23 @@ export interface Plant {
   createdAt: number;
 }
 
+=======
+  gridPosition: GridPosition;
+  footprint: { width: number; depth: number };
+  rotation: number;
+  createdAt: number;
+}
+export interface Plant { id: EntityId; species: string; gridPosition: GridPosition; growth: number; createdAt: number }
+>>>>>>> Stashed changes
 export interface Resident {
   type: "resident";
   id: EntityId;
   name: string;
-  position: Vector3;
+  position: WorldPosition;
   activity: ResidentActivity;
   createdAt: number;
 }
+<<<<<<< Updated upstream
 
 // Discriminated union of all supported world entities.
 export type WorldEntity = Building | Plant | Resident;
@@ -144,6 +165,10 @@ export interface ProgressionState {
 // Complete world state
 // --------------------------------------------------
 
+=======
+export interface Weather { condition: "sunny" | "cloudy" | "rainy" | "stormy"; updatedAt: number }
+export interface WorldSeed { seed: number }
+>>>>>>> Stashed changes
 export interface WorldState {
   seed: WorldSeed;
   grid: WorldGrid;
@@ -156,10 +181,16 @@ export interface WorldState {
 
   // Elapsed simulation time in seconds.
   simulationTime: number;
+<<<<<<< Updated upstream
 
   // Computer activity and earned growth resources.
   activity: ActivityState;
 
   // Unlocked content and progression.
   progression: ProgressionState;
+=======
+  activity: ActivityCategory;
+  lastActiveAt: number;
+  progression: { productivitySeconds: number; leisureSeconds: number; idleSeconds: number };
+>>>>>>> Stashed changes
 }

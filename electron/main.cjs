@@ -54,8 +54,8 @@ function createWindow() {
     width,
     height,
 
-    // Position EDEN.EXE near the bottom-left corner
-    x: workArea.x + 20,
+    // Position EDEN.EXE near the bottom-right corner
+    x: workArea.x + workArea.width - width - 20,
     y: workArea.y + workArea.height - height - 20,
 
     // Desktop companion appearance
