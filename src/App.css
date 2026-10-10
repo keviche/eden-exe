@@ -2,9 +2,57 @@
   width: 100%;
   height: 100%;
 }
-
 .app {
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  border-radius: 18px;
   background: transparent;
+}
+.app canvas {
+  display: block;
+}
+.wordmark {
+  position: absolute;
+  top: 15px;
+  left: 18px;
+  color: #f0fff8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-shadow: 0 1px 8px #174e4b;
+  pointer-events: none;
+}
+.wordmark span {
+  color: #b7eed6;
+}
+.status {
+  position: absolute;
+  right: 16px;
+  bottom: 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #effff7;
+  font:
+    10px/1 system-ui,
+    sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 6px #174e4b;
+  pointer-events: none;
+}
+.status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b6f5cb;
+  box-shadow: 0 0 8px currentColor;
+}
+.status i.idle {
+  background: #a5d9c7;
+}
+.status i.leisure {
+  background: #f3ca8e;
 }

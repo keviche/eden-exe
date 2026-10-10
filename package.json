@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:desktop": "concurrently -k \"npm run dev -- --host 127.0.0.1 --port 5173 --strictPort\" \"npm run electron:dev\"",
-    "electron:dev": "wait-on tcp:127.0.0.1:5173 && electron .",
+    "electron:dev": "wait-on tcp:127.0.0.1:5173 && env -u ELECTRON_RUN_AS_NODE electron .",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint": "oxlint",
