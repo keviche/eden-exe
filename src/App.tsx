@@ -65,6 +65,7 @@ function App() {
     addBuilding({
       type: "building",
       id: crypto.randomUUID(),
+      variantId: "solar-house",
       name: "Solar House",
       gridPosition: {
         x: buildings.length * 3,
