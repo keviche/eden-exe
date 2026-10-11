@@ -415,6 +415,43 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
 });
 
 function App() {
+    const setSystemIdle = useWorldStore(
+    (state) => state.setSystemIdle
+  );
+
+  useEffect(() => {
+    const api = window.edenAPI;
+
+    if (!api) return;
+
+    let mounted = true;
+    let latestTimestamp = -Infinity;
+
+    const handleActivity = (activity: {
+      status: "active" | "idle";
+      timestamp: number;
+    }) => {
+      if (!mounted || activity.timestamp < latestTimestamp) return;
+
+      latestTimestamp = activity.timestamp;
+      setSystemIdle(activity.status === "idle");
+    };
+
+    const unsubscribe = api.onActivityChanged(handleActivity);
+
+    api.getCurrentActivity()
+      .then((activity) => {
+        if (activity) handleActivity(activity);
+      })
+      .catch(console.error);
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [setSystemIdle]);
+
+  // Simulation timer and activity tracking
   const advanceTime = useWorldStore(state => state.advanceTime);
   const recordInput = useWorldStore(state => state.recordInput);
   const setActivityCategory = useWorldStore(state => state.setActivityCategory);
@@ -454,7 +491,11 @@ function App() {
       }
       // Wheel events can arrive dozens of times per second.
       const now = Date.now();
-      if (now - lastInput >= 200) { recordInput(); lastInput = now; }
+      // Only track window input when running in a browser.
+      // Electron already tracks activity across the entire Mac.
+      if (!window.edenAPI) {
+        if (now - lastInput >= 200) { recordInput(); lastInput = now; }
+      }
     };
     window.addEventListener("pointerdown", onInput, { passive: true });
     window.addEventListener("keydown", onInput);
@@ -466,7 +507,7 @@ function App() {
       window.removeEventListener("wheel", onInput);
     };
   }, [advanceTime, recordInput, setActivityCategory]);
-
+  
   function handleAddBuilding() {
     const config = BUILDING_CATALOG.find(entry => entry.id === variant)!;
     // Read current state at click time, including rapid successive additions.
