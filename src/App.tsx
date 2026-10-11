@@ -64,7 +64,7 @@ const TANK_HEIGHT = BOARD_SIZE * 0.63;
 const TANK_RADIUS = 2.4;
 // The thick soil bed raises the miniature landscape into the enclosure instead
 // of leaving a large unused aquarium-like headspace above a floor-level city.
-const TERRAIN_LIFT = 4;
+const TERRAIN_LIFT = 2;
 // A near-front three-quarter view matches the reference's display-tank framing:
 // the long front pane reads clearly, while enough of the right side remains visible.
 const CAMERA_POSITION: [number, number, number] = [BOARD_SIZE * 0.78, BOARD_SIZE * 1.08, BOARD_SIZE * 1.95];
@@ -675,8 +675,15 @@ function App() {
     const setSystemIdle = useWorldStore(
     (state) => state.setSystemIdle
   );
+    // Simulation timer and activity tracking
+  const advanceTime = useWorldStore(state => state.advanceTime);
+  const recordInput = useWorldStore(state => state.recordInput);
+  const setActivityCategory = useWorldStore(state => state.setActivityCategory);
+  const addBuilding = useWorldStore(state => state.addBuilding);
+  const addPlant = useWorldStore(state => state.addPlant);
+  const resetWorld = useWorldStore(state => state.resetWorld);
 
-  useEffect(() => {
+useEffect(() => {
     const api = window.edenAPI;
 
     if (!api) return;
@@ -686,12 +693,17 @@ function App() {
 
     const handleActivity = (activity: {
       status: "active" | "idle";
+      category?: "productivity" | "leisure" | "idle";
       timestamp: number;
     }) => {
       if (!mounted || activity.timestamp < latestTimestamp) return;
 
       latestTimestamp = activity.timestamp;
       setSystemIdle(activity.status === "idle");
+
+      if (activity.category && activity.status !== "idle") {
+        setActivityCategory(activity.category);
+      }
     };
 
     const unsubscribe = api.onActivityChanged(handleActivity);
@@ -706,15 +718,9 @@ function App() {
       mounted = false;
       unsubscribe();
     };
-  }, [setSystemIdle]);
+  }, [setSystemIdle, setActivityCategory]); // <-- Include both here
 
-  // Simulation timer and activity tracking
-  const advanceTime = useWorldStore(state => state.advanceTime);
-  const recordInput = useWorldStore(state => state.recordInput);
-  const setActivityCategory = useWorldStore(state => state.setActivityCategory);
-  const addBuilding = useWorldStore(state => state.addBuilding);
-  const addPlant = useWorldStore(state => state.addPlant);
-  const resetWorld = useWorldStore(state => state.resetWorld);
+
   // Primitive subscriptions keep the toolbar out of world movement/growth updates.
   const activityCategory = useWorldStore(state => selectActivity(state).category);
   const buildingCount = useWorldStore(state => selectBuildings(state).length);
