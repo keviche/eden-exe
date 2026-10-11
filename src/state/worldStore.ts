@@ -42,6 +42,7 @@ interface WorldStore {
 const freshWorld = (at = Date.now()): WorldState => ({
   ...structuredClone(DEFAULT_WORLD_STATE),
   cityDayKey: getCityDayKey(new Date(at)),
+  waterSeed: Math.floor(Math.random() * 4294967295) + 1,
 });
 
 const getNonIdleCategory = (

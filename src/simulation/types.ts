@@ -73,6 +73,8 @@ export interface ProgressionState {
   consumedMilestones: Record<ActivityCategory, number>;
 }
 export interface WorldState {
+  /** Procedural water layout seed. */
+  waterSeed?: number;
   grid: WorldGrid;
   buildings: Building[];
   plants: Plant[];
