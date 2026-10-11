@@ -1,5 +1,5 @@
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { DoubleSide, ShaderMaterial } from "three";
 
 type WaterKind = "river" | "lake" | "pond";
@@ -147,7 +147,7 @@ void main() {
 }
 `;
 
-export default function WaterSurface({
+export default memo(function WaterSurface({
   kind
 }: {
   kind: WaterKind;
@@ -177,4 +177,4 @@ export default function WaterSurface({
       side={DoubleSide}
     />
   );
-}
+});

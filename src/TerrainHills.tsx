@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { memo, useEffect, useMemo } from "react";
 import {
   BufferGeometry,
   Float32BufferAttribute,
@@ -196,7 +196,7 @@ function TerrainDetailInstances({
   return <primitive object={resources.mesh} />;
 }
 
-export default function TerrainHills({
+export default memo(function TerrainHills({
   seed,
   night
 }: {
@@ -234,12 +234,22 @@ export default function TerrainHills({
       });
     }
 
-    function distanceFromWater(x: number, z: number) {
-      let riverDistance = Infinity;
+    const riverPoints = Array.from({ length: 101 }, (_, index) =>
+      water.riverPoint(index / 100)
+    );
+    const riverStep = BOARD_SIZE * 0.92 / 100;
+    const riverInfluence = 6;
 
-      // Approximate the actual curved river centerline.
-      for (let i = 0; i <= 100; i++) {
-        const p = water.riverPoint(i / 100);
+    function distanceFromWater(x: number, z: number) {
+      // Terrain shading and detail placement stop changing beyond five units
+      // from water. Search a small z window around this point; the river's z
+      // coordinate advances monotonically, so distant samples cannot matter.
+      let riverDistance = riverInfluence;
+      const first = Math.max(0, Math.ceil((z - riverInfluence + BOARD_SIZE * 0.46) / riverStep));
+      const last = Math.min(100, Math.floor((z + riverInfluence + BOARD_SIZE * 0.46) / riverStep));
+
+      for (let i = first; i <= last; i++) {
+        const p = riverPoints[i]!;
         const distance =
           Math.hypot(x - p.x, z - p.z) - p.width;
 
@@ -265,7 +275,7 @@ export default function TerrainHills({
       );
     }
 
-    function heightAt(x: number, z: number) {
+    function heightAt(x: number, z: number, knownWaterDistance?: number) {
       // Broad rolling terrain with no abrupt peaks.
       const broadRoll =
         Math.sin(x * 0.18 + seed * 0.17) *
@@ -312,7 +322,7 @@ export default function TerrainHills({
       }
 
       // Preserve the water surface and create gentle banks.
-      const waterDistance = distanceFromWater(x, z);
+      const waterDistance = knownWaterDistance ?? distanceFromWater(x, z);
       const shoreline = smoothstep(0.0, 2.4, waterDistance);
 
       // Slightly raise land around the water without
@@ -379,7 +389,11 @@ export default function TerrainHills({
       );
     }
 
-    function terrainColor(x: number, z: number) {
+    function terrainColor(
+      x: number,
+      z: number,
+      waterDistance = distanceFromWater(x, z),
+    ): [number, number, number] {
       const broad = noise(x * 0.35, z * 0.35);
       const medium = noise(x * 1.7, z * 1.7);
       const fine = noise(x * 7.0, z * 7.0);
@@ -388,8 +402,6 @@ export default function TerrainHills({
         (broad - 0.5) * 0.22 +
         (medium - 0.5) * 0.16 +
         (fine - 0.5) * 0.09;
-
-      const waterDistance = distanceFromWater(x, z);
 
       const wetness =
         1 - smoothstep(0.15, 1.65, waterDistance);
@@ -429,41 +441,44 @@ export default function TerrainHills({
       ];
     }
 
-    function addColor(x: number, z: number) {
-      colors.push(...terrainColor(x, z));
+    const size = BOARD_SIZE * 0.96;
+    const samples: Array<{
+      position: [number, number, number];
+      color: [number, number, number];
+    }> = [];
+
+    // Each grid corner is shared by up to four cells. Compute its expensive
+    // height and water-aware color once, then reuse it in the triangle soup.
+    for (let iz = 0; iz <= divisions; iz++) {
+      for (let ix = 0; ix <= divisions; ix++) {
+        const x = -size / 2 + ix / divisions * size;
+        const z = -size / 2 + iz / divisions * size;
+        const waterDistance = distanceFromWater(x, z);
+        samples.push({
+          position: [x, 0.012 + heightAt(x, z, waterDistance), z],
+          color: terrainColor(x, z, waterDistance),
+        });
+      }
     }
 
-    const size = BOARD_SIZE * 0.96;
+    const addSample = (sample: (typeof samples)[number]) => {
+      positions.push(...sample.position);
+      colors.push(...sample.color);
+    };
 
     for (let iz = 0; iz < divisions; iz++) {
       for (let ix = 0; ix < divisions; ix++) {
-        const x0 = -size / 2 + ix / divisions * size;
-        const x1 = -size / 2 + (ix + 1) / divisions * size;
-        const z0 = -size / 2 + iz / divisions * size;
-        const z1 = -size / 2 + (iz + 1) / divisions * size;
+        const topLeft = samples[iz * (divisions + 1) + ix]!;
+        const topRight = samples[iz * (divisions + 1) + ix + 1]!;
+        const bottomLeft = samples[(iz + 1) * (divisions + 1) + ix]!;
+        const bottomRight = samples[(iz + 1) * (divisions + 1) + ix + 1]!;
 
-        const y00 = 0.012 + heightAt(x0, z0);
-        const y10 = 0.012 + heightAt(x1, z0);
-        const y01 = 0.012 + heightAt(x0, z1);
-        const y11 = 0.012 + heightAt(x1, z1);
-
-        positions.push(
-          x0, y00, z0,
-          x0, y01, z1,
-          x1, y10, z0,
-
-          x1, y10, z0,
-          x0, y01, z1,
-          x1, y11, z1
-        );
-
-        addColor(x0, z0);
-        addColor(x0, z1);
-        addColor(x1, z0);
-
-        addColor(x1, z0);
-        addColor(x0, z1);
-        addColor(x1, z1);
+        addSample(topLeft);
+        addSample(bottomLeft);
+        addSample(topRight);
+        addSample(topRight);
+        addSample(bottomLeft);
+        addSample(bottomRight);
 
       }
     }
@@ -711,4 +726,4 @@ export default function TerrainHills({
     />
     </>
   );
-}
+});

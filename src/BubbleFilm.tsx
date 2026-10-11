@@ -1,5 +1,5 @@
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { DoubleSide, ShaderMaterial } from "three";
 
 const vertexShader = `
@@ -75,7 +75,7 @@ void main() {
 }
 `;
 
-export default function BubbleFilm() {
+export default memo(function BubbleFilm() {
   const material = useRef<ShaderMaterial>(null);
 
   useFrame(({ clock }) => {
@@ -95,4 +95,4 @@ export default function BubbleFilm() {
       side={DoubleSide}
     />
   );
-}
+});
