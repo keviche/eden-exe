@@ -214,12 +214,66 @@ function flatRoof(b: Builder, width: number, depth: number, y: number) {
 function buildBuilding(variant: string, width: number, depth: number, stage: number, seed: number, floorsOverride?: number, moss = 0): Model {
   const b = new Builder();
   const base = 0.12;
-  const floorHeight = 0.86;
+  const floorHeight = 0.78;
   const config = BUILDING_CATALOG.find(entry => entry.id === variant) ?? BUILDING_CATALOG[0];
   const floors = Math.min(MAX_BUILDING_FLOORS, Math.max(1, Math.round(floorsOverride ?? (1 + (config.floors - 1) * stage / 2))));
+  
+  // Foundation pad
+  b.box([width + 0.1, base, depth + 0.1], [0, base / 2, 0], "#acb6a4");
+
+  // --- ALL-GLASS STREAMLINE MODERNE STYLE FOR SOLAR HOUSE ---
+  if (variant === "solar-house") {
+    const radius = Math.min(width, depth) * 0.38;
+    
+    for (let floor = 0; floor < floors; floor++) {
+      const y = base + floor * floorHeight;
+      const isTop = floor === floors - 1;
+
+      // Main structural body replaced with transparent glass cylinder
+      b.add("cylinder", [0, y + floorHeight / 2, 0], [radius, floorHeight, radius], "#70e5f3", [0, 0, 0], "glass");
+      
+      // Teal tile base wainscoting around the bottom of each floor
+      b.add("cylinder", [0, y + 0.10, 0], [radius * 1.01, 0.20, radius * 1.01], "#35a79c");
+      b.add("cylinder", [0, y + 0.20, 0], [radius * 1.02, 0.04, radius * 1.02], "#d0ecea"); // Chrome trim line
+
+      // Extra large wrap-around glass ribbon windows/panels for full transparency
+      for (let face = 0; face < 4; face++) {
+        const angle = (face * Math.PI) / 2;
+        const wx = Math.sin(angle) * radius * 0.94;
+        const wz = Math.cos(angle) * radius * 0.94;
+        
+        if (floor > 0 || face !== 0) {
+          b.group([wx, y + floorHeight * 0.55, wz], [0, angle, 0], [1, 1, 1], () => {
+            b.box([0.62, 0.44, 0.03], [0, 0, 0], "#d0ecea"); // Thin chrome framing
+            b.box([0.56, 0.38, 0.015], [0, 0, 0.02], "#a6f7ff", [0, 0, 0], "glass"); // Full crystal glass pane
+          });
+        }
+      }
+
+      // Inter-floor chrome/glass divider rim
+      if (!isTop) {
+        b.add("cylinder", [0, y + floorHeight, 0], [radius * 1.04, 0.06, radius * 1.04], "#e2f2f1");
+      } else {
+        // Streamline Moderne curved overhanging roof on the top floor with glass accents
+        b.add("cylinder", [0, y + floorHeight + 0.04, 0], [radius * 1.15, 0.08, radius * 1.15], "#f3f0eb");
+        b.add("cylinder", [0, y + floorHeight + 0.09, 0], [radius * 1.18, 0.04, radius * 1.18], "#d0ecea"); // Chrome lip
+      }
+    }
+
+    // Ground floor glass-paneled entrance and overhanging canopy
+    const frontZ = depth / 2;
+    b.box([0.46, 0.68, 0.05], [0, base + 0.34, frontZ], "#d0ecea"); // Chrome door frame
+    b.box([0.36, 0.58, 0.025], [0, base + 0.34, frontZ + 0.02], "#a6f7ff", [0, 0, 0], "glass"); // Glass door
+    b.box([0.7, 0.06, 0.35], [0, base + floorHeight * 0.65, frontZ + 0.12], "#f3f0eb");
+    b.add("cylinder", [0, base + floorHeight * 0.65 + 0.03, frontZ + 0.12], [0.35, 0.04, 0.2], "#35a79c");
+
+    addMoss(b, width, depth, base + floors * floorHeight + 0.1, moss, seed);
+    return b.parts;
+  }
+
+  // --- FALLBACK LOGIC FOR ALL OTHER VARIANTS ---
   const colors = ["#e8bd7d", "#f2d49a", "#c98f5e", "#f5e0b1"];
   const wallColor = colors[seed % colors.length]!;
-  b.box([width + 0.1, base, depth + 0.1], [0, base / 2, 0], "#acb6a4");
 
   if (variant === "garden-pavilion") {
     const y = 1.1;
@@ -270,85 +324,18 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
     }
     for (const side of [-1, 1]) {
       b.box([width, 0.045, 0.045], [0, base + height * 0.55, side * depth / 2], "#f1ead7");
-      for (const z of [-depth / 2, 0, depth / 2]) b.box([0.045, height, 0.045], [side * width / 2, base + height / 2, z], "#eceddd");
-      b.box([0.045, 0.045, depth], [side * width / 2, base + height * 0.55, 0], "#eceddd");
+      for (let z = -depth / 2; z <= depth / 2; z += depth / 2) b.box([0.045, height, 0.045], [side * width / 2, base + height / 2, z], "#eceddd");
     }
-    for (let floor = 1; floor < floors; floor++) b.box([width + 0.06, 0.045, depth + 0.06], [0, base + floor * floorHeight, 0], "#f1ead7");
     b.add("gable", [0, base + height + 0.3, 0], [width + 0.08, 0.6, depth + 0.08], "#b3f6ed", [0, 0, 0], "greenhouse");
     entrance(b, width, depth, stage);
-    if (stage > 0) for (const side of [-1, 1]) {
-      for (let plant = 0; plant < 3; plant++) planter(b, [(plant - 1) * width * 0.25, 0, side * (depth / 2 + 0.11)], 0.16);
-    }
-    if (stage === 2) {
-      b.add("cylinder", [-width * 0.34, base + height + 0.23, -depth * 0.22], [0.1, 0.4, 0.1], "#3f8978");
-      const roofDepth = depth + 0.08, tilt = Math.atan2(0.6, roofDepth / 2);
-      solarPanel(b, [width * 0.16, base + height + 0.18 + 0.04 * Math.cos(tilt), roofDepth * 0.35 + 0.04 * Math.sin(tilt)], width * 0.2, Math.hypot(0.6, roofDepth / 2) * 0.36, tilt);
-    }
     addMoss(b, width, depth, base + height + 0.6, moss, seed);
     return b.parts;
   }
 
-  let roofY: number;
-  if (variant === "eco-apartments") {
-    roofY = base;
-    for (let floor = 0; floor < floors; floor++) {
-      const floorWidth = width - floor * 0.14;
-      const floorDepth = depth - floor * 0.1;
-      b.group([0, floor * floorHeight, 0], [0, 0, 0], [1, 1, 1], () => {
-        facade(b, floorWidth, floorDepth, 1, floorHeight, floor % 2 === 0 ? "#d5ddc7" : "#b0d5c5");
-        if (floor > 0) {
-          b.box([floorWidth * 0.83, 0.065, 0.23], [0, base + 0.18, floorDepth / 2 + 0.05], "#f0e6d2");
-          for (const side of [-1, 1]) planter(b, [side * floorWidth * 0.28, base + 0.22, floorDepth / 2 + 0.05], 0.14);
-        }
-      });
-      roofY += floorHeight;
-    }
-    const topWidth = width - (floors - 1) * 0.14, topDepth = depth - (floors - 1) * 0.1;
-    flatRoof(b, topWidth, topDepth, roofY);
-    if (stage > 0) solarPanel(b, [0, roofY + 0.25, 0], topWidth * 0.62, topDepth * 0.4);
-    if (stage === 2) planter(b, [0, roofY + 0.1, -topDepth * 0.3], 0.24);
-  } else {
-    roofY = facade(b, width, depth, floors, floorHeight, variant === "solar-workshop" ? "#a8e2d5" : variant === "community-library" ? "#f4dfae" : wallColor);
-    if (variant === "solar-house" || variant === "solar-workshop" || variant === "community-library" || !BUILDING_CATALOG.some(entry => entry.id === variant)) {
-      const roofHeight = 0.48, roofDepth = depth + 0.16;
-      b.box([width + 0.13, 0.065, depth + 0.13], [0, roofY, 0], "#fff0c7");
-      const roofColors = ["#b85f42", "#9e5840", "#c46c49", "#a66144"];
-      b.add("gable", [0, roofY + roofHeight / 2, 0], [width + 0.16, roofHeight, roofDepth], roofColors[seed % roofColors.length]!);
-      for (const side of [-1, 1]) b.box([0.075, floors * floorHeight, 0.045], [side * (width / 2 - 0.12), base + floors * floorHeight / 2, depth / 2 + 0.035], "#9c5e3d");
-      if (stage > 0) for (const side of [-1, 1]) {
-        const tilt = Math.atan2(roofHeight, roofDepth / 2);
-        solarPanel(b, [side * width * 0.16, roofY + roofHeight * 0.3 + 0.04 * Math.cos(tilt), roofDepth * 0.35 + 0.04 * Math.sin(tilt)], width * 0.2, Math.hypot(roofHeight, roofDepth / 2) * 0.36, tilt);
-      }
-      if (stage === 2) {
-        b.box([0.18, 0.45, 0.18], [-width * 0.32, roofY + 0.37, -depth * 0.25], "#d4c8ad");
-        b.box([0.23, 0.05, 0.23], [-width * 0.32, roofY + 0.62, -depth * 0.25], "#52796b");
-      }
-    } else {
-      flatRoof(b, width, depth, roofY);
-      if (variant === "community-library") {
-        // Broad portico and a small facade motif resembling book spines.
-        b.box([width * 0.7, 0.12, 0.32], [0, 1.08, depth / 2 + 0.06], "#eee6ce");
-        for (const side of [-1, 1]) b.add("cylinder", [side * width * 0.28, 0.54, depth / 2 + 0.15], [0.045, 0.96, 0.045], "#e7d9bd");
-        ["#ba927b", "#629b89", "#d7b95e"].forEach((color, index) => b.box([0.08, 0.18 + index * 0.02, 0.025], [width * 0.4 + (index - 1) * 0.095, 0.84, depth / 2 + 0.035], color));
-        if (stage > 0) for (const side of [-1, 1]) planter(b, [side * width * 0.3, roofY + 0.1, -depth * 0.25], 0.24);
-        if (stage === 2) solarPanel(b, [0, roofY + 0.28, depth * 0.14], width * 0.4, depth * 0.42);
-      } else if (variant === "rooftop-farm") {
-        const beds = stage + 1;
-        for (let bed = 0; bed < beds; bed++) {
-          const z = (bed - (beds - 1) / 2) * depth * 0.23;
-          b.box([width * 0.7, 0.09, depth * 0.15], [0, roofY + 0.14, z], "#b78d68");
-          b.box([width * 0.66, 0.015, depth * 0.13], [0, roofY + 0.193, z], "#685844");
-          for (let crop = 0; crop < 4; crop++) b.foliage([(crop - 1.5) * width * 0.15, roofY + 0.28, z], 0.12, crop % 2 === 0 ? "#94bc6e" : "#619d65");
-        }
-        if (stage === 2) b.add("cylinder", [-width * 0.4, roofY + 0.25, -depth * 0.35], [0.14, 0.3, 0.14], "#78b8b5");
-      } else {
-        if (stage > 0) for (const side of [-1, 1]) solarPanel(b, [side * width * 0.24, roofY + 0.35, depth * 0.05], width * 0.34, depth * 0.42);
-        if (stage === 2) for (const side of [-1, 1]) planter(b, [side * width * 0.28, roofY + 0.1, -depth * 0.32], 0.24);
-      }
-    }
-  }
+  let roofY = facade(b, width, depth, floors, floorHeight, wallColor);
+  flatRoof(b, width, depth, roofY);
   entrance(b, width, depth, stage);
-  addMoss(b, width, depth, roofY + (variant === "solar-house" ? 0.5 : 0.16), moss, seed);
+  addMoss(b, width, depth, roofY + 0.16, moss, seed);
   return b.parts;
 }
 
