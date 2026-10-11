@@ -24,15 +24,40 @@ export interface WorldSeed {
   seed: number;
 }
 
+export type BuildingKind =
+  | "house"
+  | "workshop"
+  | "school"
+  | "library"
+  | "restaurant"
+  | "cafe"
+  | "arcade"
+  | "recreation-center";
 export interface Building {
   type: "building";
   id: EntityId;
   name: string;
+
   /** Stable key used to select this building's visual variant. */
   variantId: string;
+
+  /** Building category, such as house, school, or restaurant. */
+  kind?: BuildingKind;
+
+  /** Architectural development level, from 1 to 5. */
+  level?: number;
+
+  /** Vegetation coverage, from 0 to 1. */
+  natureGrowth?: number;
+
   /** Anchor cell at the minimum X/Z footprint corner. */
   gridPosition: GridPosition;
-  footprint: { width: number; depth: number };
+
+  footprint: {
+    width: number;
+    depth: number;
+  };
+
   rotation: number;
   createdAt: number;
 }

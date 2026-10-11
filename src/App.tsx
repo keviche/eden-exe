@@ -1,7 +1,9 @@
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
+import * as THREE from "three";
+
 import {
   selectActivity,
   selectBuildings,
@@ -9,984 +11,749 @@ import {
   selectResidents,
   useWorldStore,
 } from "./state/worldStore";
-import type { Building, Plant, Resident } from "./simulation/types";
+
+import type {
+  Building,
+  BuildingKind,
+  Plant,
+  Resident,
+} from "./simulation/types";
+
 import "./App.css";
-import * as THREE from "three";
+
+// --------------------------------------------------
+// World dimensions
+// --------------------------------------------------
 
 const BOARD_SIZE = 9;
 const GRID_SIZE = 6;
-const BUILDING_SIZE = 2;
+const ISLAND_RADIUS = 6.4;
 
-function cellPoint(x: number, z: number, width: number, depth: number) {
-  return { x: ((x + 0.5) / width - 0.5) * BOARD_SIZE, z: ((z + 0.5) / depth - 0.5) * BOARD_SIZE };
+// --------------------------------------------------
+// Building definitions
+// --------------------------------------------------
+
+const BUILDING_TYPES: {
+  kind: BuildingKind;
+  name: string;
+  variantId: string;
+}[] = [
+  {
+    kind: "house",
+    name: "Canopy House",
+    variantId: "canopy-house",
+  },
+  {
+    kind: "workshop",
+    name: "Solar Workshop",
+    variantId: "solar-workshop",
+  },
+  {
+    kind: "school",
+    name: "School",
+    variantId: "school",
+  },
+  {
+    kind: "library",
+    name: "Library",
+    variantId: "library",
+  },
+  {
+    kind: "restaurant",
+    name: "Restaurant",
+    variantId: "restaurant",
+  },
+  {
+    kind: "cafe",
+    name: "Cafe",
+    variantId: "cafe",
+  },
+  {
+    kind: "arcade",
+    name: "Arcade",
+    variantId: "arcade",
+  },
+  {
+    kind: "recreation-center",
+    name: "Recreation Center",
+    variantId: "recreation-center",
+  },
+];
+
+const PALETTES = [
+  { wall: "#e8d7bd", roof: "#719b81", trim: "#fff0da" },
+  { wall: "#c8dcd0", roof: "#5d8c81", trim: "#edf6e7" },
+  { wall: "#e7c7bd", roof: "#b77b70", trim: "#fff1e2" },
+  { wall: "#cad7e5", roof: "#7c91b2", trim: "#f2f3ed" },
+  { wall: "#d9cde2", roof: "#8e7ca7", trim: "#f7edf5" },
+  { wall: "#eadcbd", roof: "#aa8c69", trim: "#fff4df" },
+];
+
+// --------------------------------------------------
+// Position and randomness helpers
+// --------------------------------------------------
+
+function cellPoint(x: number, z: number) {
+  return {
+    x: ((x + 0.5) / GRID_SIZE - 0.5) * BOARD_SIZE,
+    z: ((z + 0.5) / GRID_SIZE - 0.5) * BOARD_SIZE,
+  };
 }
 
-type EdenVector = [number, number, number];
+function hashString(value: string) {
+  let hash = 2166136261;
 
-function EdenBlock({
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function random(seed: number, salt: number) {
+  let n = (seed + salt * 374761393) >>> 0;
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+}
+
+// --------------------------------------------------
+// Reusable geometry
+// --------------------------------------------------
+
+function Block({
+  position,
   size,
-  position = [0, 0, 0],
   color,
-  roughness = 0.75,
-  metalness = 0,
+  rotation,
 }: {
-  size: EdenVector;
-  position?: EdenVector;
+  position: [number, number, number];
+  size: [number, number, number];
   color: string;
-  roughness?: number;
-  metalness?: number;
-}) {
-  return (
-    <mesh position={position} castShadow receiveShadow>
-      <boxGeometry args={size} />
-      <meshStandardMaterial
-        color={color}
-        roughness={roughness}
-        metalness={metalness}
-      />
-    </mesh>
-  );
-}
-
-function EdenWindow({
-  position,
-  rotation = 0,
-  width = 0.28,
-  height = 0.32,
-}: {
-  position: EdenVector;
-  rotation?: number;
-  width?: number;
-  height?: number;
-}) {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      {/* Dark surround gives the window a recessed appearance. */}
-      <EdenBlock
-        size={[width + 0.065, height + 0.065, 0.04]}
-        color="#285c57"
-      />
-
-      <mesh position={[0, 0, 0.026]}>
-        <boxGeometry args={[width, height, 0.012]} />
-        <meshStandardMaterial
-          color="#c4eee4"
-          roughness={0.18}
-          metalness={0.12}
-          emissive="#ffd89a"
-          emissiveIntensity={0.28}
-        />
-      </mesh>
-
-      {/* Center mullion and projecting sill. */}
-      <EdenBlock
-        size={[0.018, height, 0.018]}
-        position={[0, 0, 0.038]}
-        color="#f2ecd9"
-      />
-      <EdenBlock
-        size={[width + 0.10, 0.035, 0.095]}
-        position={[0, -height / 2 - 0.03, 0.015]}
-        color="#f2ecd9"
-      />
-    </group>
-  );
-}
-
-function EdenPlanter({
-  position,
-  size = 0.16,
-}: {
-  position: EdenVector;
-  size?: number;
-}) {
-  return (
-    <group position={position}>
-      <EdenBlock
-        size={[size, size * 0.65, size]}
-        position={[0, size * 0.325, 0]}
-        color="#c58d68"
-      />
-      <EdenBlock
-        size={[size * 1.12, size * 0.14, size * 1.12]}
-        position={[0, size * 0.65, 0]}
-        color="#dfb18b"
-      />
-
-      {/* Overlapping crowns make a fuller little shrub. */}
-      {[-1, 1].map((side) => (
-        <mesh
-          key={side}
-          position={[
-            side * size * 0.23,
-            size * 1.02,
-            side * size * 0.12,
-          ]}
-          scale={[1, 0.9, 1]}
-          castShadow
-        >
-          <icosahedronGeometry args={[size * 0.65, 1]} />
-          <meshStandardMaterial
-            color={side === -1 ? "#4f9d68" : "#82bf76"}
-            roughness={0.95}
-            flatShading
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function EdenSolarPanel({
-  position,
-  tilt,
-  width,
-  depth,
-}: {
-  position: EdenVector;
-  tilt: number;
-  width: number;
-  depth: number;
-}) {
-  return (
-    <group position={position} rotation={[tilt, 0, 0]}>
-      <EdenBlock
-        size={[width, 0.035, depth]}
-        color="#d9e8df"
-        roughness={0.4}
-        metalness={0.25}
-      />
-      <EdenBlock
-        size={[width - 0.035, 0.01, depth - 0.035]}
-        position={[0, 0.024, 0]}
-        color="#22516b"
-        roughness={0.24}
-        metalness={0.35}
-      />
-
-      {/* Cell divisions. */}
-      <EdenBlock
-        size={[0.008, 0.006, depth - 0.035]}
-        position={[0, 0.032, 0]}
-        color="#83b9c5"
-      />
-      <EdenBlock
-        size={[width - 0.035, 0.006, 0.008]}
-        position={[0, 0.032, 0]}
-        color="#83b9c5"
-      />
-    </group>
-  );
-}
-
-function BuildingMesh({ item }: { item: Building }) {
-  const at = cellPoint(
-    item.gridPosition.x + (item.footprint.width - 1) / 2,
-    item.gridPosition.z + (item.footprint.depth - 1) / 2,
-    GRID_SIZE,
-    GRID_SIZE
-  );
-
-  const workshop = item.variantId === "solar-workshop";
-  const cellSize = BOARD_SIZE / 6;
-
-  // Leave space around each building for steps and roof overhangs.
-  const width = item.footprint.width * cellSize - 0.32;
-  const depth = item.footprint.depth * cellSize - 0.5;
-
-  // Stable variation: buildings keep their appearance across renders.
-  const seed = Array.from(String(item.id)).reduce(
-    (sum, letter) => sum + letter.charCodeAt(0),
-    0,
-  );
-
-  const height = workshop
-    ? 1.65 + (seed % 3) * 0.1
-    : 1.0 + (seed % 3) * 0.05;
-
-  const houseColors = ["#e9dfc7", "#e6cdb7", "#d8e1cf"];
-  const workshopColors = ["#aad6c4", "#a7cfd1", "#bdd8b4"];
-  const wallColor = (workshop ? workshopColors : houseColors)[seed % 3];
-
-  const base = 0.12;
-  const wallTop = base + height;
-  const front = depth / 2;
-  const doorWidth = Math.min(0.3, width * 0.23);
-  const windowWidth = Math.min(0.42, width * 0.23);
-  const windowHeight = workshop ? 0.32 : 0.28;
-
-  const windowRows = workshop
-    ? [base + height * 0.32, base + height * 0.76]
-    : [base + height * 0.74];
-
-  const roofHeight = 0.48;
-  const roofDepth = depth + 0.16;
-  const roofTilt = Math.atan2(roofHeight, roofDepth / 2);
-  const housePanelDepth = Math.hypot(roofHeight, roofDepth / 2) * 0.52;
-  const workshopPanelDepth = depth * 0.45;
-
-  return (
-    <group position={[at.x, 0, at.z]} rotation={[0, item.rotation, 0]}>
-      {/* Stone foundation and main walls. */}
-      <EdenBlock
-        size={[width + 0.1, base, depth + 0.1]}
-        position={[0, base / 2, 0]}
-        color="#acb6a4"
-      />
-      <EdenBlock
-        size={[width, height, depth]}
-        position={[0, base + height / 2, 0]}
-        color={wallColor}
-      />
-
-      {/* Cream corner trim breaks up the plain box silhouette. */}
-      {[-1, 1].flatMap((xSide) =>
-        [-1, 1].map((zSide) => (
-          <EdenBlock
-            key={`corner-${xSide}-${zSide}`}
-            size={[0.045, height, 0.045]}
-            position={[
-              xSide * width / 2,
-              base + height / 2,
-              zSide * depth / 2,
-            ]}
-            color="#f1ecdc"
-          />
-        )),
-      )}
-
-      {/* Windows on the front, back, and both sides. */}
-      {windowRows.map((y, row) => (
-        <group key={`floor-${row}`}>
-          {[-1, 1].map((side) => (
-            <group key={`windows-${side}`}>
-              <EdenWindow
-                position={[side * width * 0.32, y, front + 0.012]}
-                width={windowWidth}
-                height={windowHeight}
-              />
-              <EdenWindow
-                position={[side * width * 0.32, y, -front - 0.012]}
-                rotation={Math.PI}
-                width={windowWidth}
-                height={windowHeight}
-              />
-              <EdenWindow
-                position={[side * (width / 2 + 0.012), y, 0]}
-                rotation={side * Math.PI / 2}
-                width={Math.min(0.42, depth * 0.3)}
-                height={windowHeight}
-              />
-            </group>
-          ))}
-        </group>
-      ))}
-
-      {workshop && (
-        <EdenBlock
-          size={[width + 0.025, 0.045, depth + 0.025]}
-          position={[0, base + height * 0.53, 0]}
-          color="#ecedda"
-        />
-      )}
-
-      {/* Entrance: frame, door glass, brass handle, and canopy. */}
-      <EdenBlock
-        size={[doorWidth + 0.065, 0.6, 0.05]}
-        position={[0, base + 0.3, front + 0.025]}
-        color="#345e54"
-      />
-      <EdenBlock
-        size={[doorWidth, 0.54, 0.022]}
-        position={[0, base + 0.27, front + 0.055]}
-        color={workshop ? "#568f83" : "#b88a65"}
-      />
-
-      <mesh position={[0, base + 0.36, front + 0.073]}>
-        <boxGeometry args={[doorWidth * 0.7, 0.23, 0.012]} />
-        <meshStandardMaterial
-          color="#c5eee0"
-          roughness={0.2}
-          emissive="#ffdcaa"
-          emissiveIntensity={0.2}
-        />
-      </mesh>
-
-      <mesh
-        position={[doorWidth * 0.3, base + 0.24, front + 0.086]}
-      >
-        <sphereGeometry args={[0.015, 8, 6]} />
-        <meshStandardMaterial
-          color="#e6bf71"
-          metalness={0.65}
-          roughness={0.3}
-        />
-      </mesh>
-
-      <EdenBlock
-        size={[doorWidth + 0.14, 0.055, 0.28]}
-        position={[0, base + 0.66, front + 0.08]}
-        color={workshop ? "#377f71" : "#cbad82"}
-      />
-      <EdenBlock
-        size={[doorWidth + 0.18, base, 0.22]}
-        position={[0, base / 2, front + 0.09]}
-        color="#d5d4bc"
-      />
-
-      {[-1, 1].map((side) => (
-        <EdenPlanter
-          key={`entrance-plant-${side}`}
-          position={[side * width * 0.4, 0, front + 0.1]}
-          size={0.15}
-        />
-      ))}
-
-      {workshop ? (
-        <group>
-          {/* Flat roof with a planted surface and raised edges. */}
-          <EdenBlock
-            size={[width + 0.16, 0.075, depth + 0.16]}
-            position={[0, wallTop + 0.025, 0]}
-            color="#edf0df"
-          />
-          <EdenBlock
-            size={[width, 0.045, depth]}
-            position={[0, wallTop + 0.075, 0]}
-            color="#80ab73"
-          />
-
-          {[-1, 1].map((side) => (
-            <group key={`roof-edge-${side}`}>
-              <EdenBlock
-                size={[width + 0.12, 0.1, 0.06]}
-                position={[0, wallTop + 0.105, side * (depth / 2 + 0.025)]}
-                color="#dce6ce"
-              />
-              <EdenBlock
-                size={[0.06, 0.1, depth + 0.1]}
-                position={[side * (width / 2 + 0.025), wallTop + 0.105, 0]}
-                color="#dce6ce"
-              />
-
-              <EdenSolarPanel
-                position={[
-                  side * width * 0.24,
-                  wallTop + 0.18 + workshopPanelDepth * Math.sin(0.22) / 2,
-                  depth * 0.1,
-                ]}
-                tilt={0.22}
-                width={width * 0.34}
-                depth={workshopPanelDepth}
-              />
-
-              <EdenPlanter
-                position={[side * width * 0.28, wallTop + 0.1, -depth * 0.32]}
-                size={0.2}
-              />
-            </group>
-          ))}
-        </group>
-      ) : (
-        <group>
-          {/* A four-sided roof scaled to the building's actual footprint. */}
-          <EdenBlock
-            size={[width + 0.13, 0.065, depth + 0.13]}
-            position={[0, wallTop, 0]}
-            color="#eee7d2"
-          />
-
-          <mesh
-            position={[0, wallTop + roofHeight / 2, 0]}
-            rotation={[0, Math.PI / 4, 0]}
-            scale={[width + 0.16, 1, roofDepth]}
-            castShadow
-            receiveShadow
-          >
-            <coneGeometry args={[Math.SQRT1_2, roofHeight, 4]} />
-            <meshStandardMaterial
-              color={seed % 2 === 0 ? "#438e76" : "#537f72"}
-              roughness={0.9}
-              flatShading
-            />
-          </mesh>
-
-          {[-1, 1].map((side) => (
-            <EdenSolarPanel
-              key={`house-panel-${side}`}
-              position={[
-                side * width * 0.22,
-                wallTop + roofHeight * 0.48 + 0.035 * Math.cos(roofTilt),
-                roofDepth * 0.26 + 0.035 * Math.sin(roofTilt),
-              ]}
-              tilt={roofTilt}
-              width={width * 0.33}
-              depth={housePanelDepth}
-            />
-          ))}
-
-          {/* Small capped chimney toward the rear. */}
-          <EdenBlock
-            size={[0.14, 0.42, 0.14]}
-            position={[
-              -width * 0.32,
-              wallTop + roofHeight * 0.46 + 0.17,
-              -depth * 0.25,
-            ]}
-            color="#d4c8ad"
-          />
-          <EdenBlock
-            size={[0.19, 0.045, 0.19]}
-            position={[
-              -width * 0.32,
-              wallTop + roofHeight * 0.46 + 0.4,
-              -depth * 0.25,
-            ]}
-            color="#52796b"
-          />
-        </group>
-      )}
-    </group>
-  );
-}
-
-type EdenPlantVector = [number, number, number];
-
-// A stem or branch connecting two points.
-function EdenPlantStem({
-  start,
-  end,
-  radius = 0.012,
-  color = "#54804d",
-}: {
-  start: EdenPlantVector;
-  end: EdenPlantVector;
-  radius?: number;
-  color?: string;
-}) {
-  const dx = end[0] - start[0];
-  const dy = end[1] - start[1];
-  const dz = end[2] - start[2];
-
-  const length = Math.hypot(dx, dy, dz);
-  const yaw = Math.atan2(dx, dz);
-  const tilt = Math.atan2(Math.hypot(dx, dz), dy);
-
-  return (
-    <group
-      position={[
-        (start[0] + end[0]) / 2,
-        (start[1] + end[1]) / 2,
-        (start[2] + end[2]) / 2,
-      ]}
-      rotation={[0, yaw, 0]}
-    >
-      <mesh rotation={[tilt, 0, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[radius * 0.7, radius, length, 6]} />
-        <meshStandardMaterial color={color} roughness={0.95} />
-      </mesh>
-    </group>
-  );
-}
-
-// An elongated, flattened leaf.
-function EdenLeaf({
-  position,
-  rotation = [0, 0, 0],
-  length = 0.2,
-  width = 0.07,
-  color = "#66aa68",
-}: {
-  position: EdenPlantVector;
-  rotation?: EdenPlantVector;
-  length?: number;
-  width?: number;
-  color?: string;
+  rotation?: [number, number, number];
 }) {
   return (
     <mesh
       position={position}
       rotation={rotation}
-      scale={[width / 2, length / 2, 0.012]}
       castShadow
       receiveShadow
     >
-      <sphereGeometry args={[1, 6, 4]} />
-      <meshStandardMaterial color={color} roughness={0.9} flatShading />
+      <boxGeometry args={size} />
+      <meshStandardMaterial color={color} roughness={0.85} />
     </mesh>
   );
 }
 
-// A rounded, faceted foliage cluster.
-function EdenFoliage({
+function Window({
   position,
-  radius,
-  color,
-  scale = [1, 0.9, 1],
+  size = [0.14, 0.14],
+  rotation = 0,
 }: {
-  position: EdenPlantVector;
-  radius: number;
-  color: string;
-  scale?: EdenPlantVector;
+  position: [number, number, number];
+  size?: [number, number];
+  rotation?: number;
 }) {
   return (
-    <mesh position={position} scale={scale} castShadow receiveShadow>
-      <icosahedronGeometry args={[radius, 1]} />
-      <meshStandardMaterial color={color} roughness={0.95} flatShading />
-    </mesh>
-  );
-}
-
-function EdenFern() {
-  // These points trace a frond that bends outward as it rises.
-  const points: EdenPlantVector[] = [
-    [0, 0, 0],
-    [0, 0.18, 0.08],
-    [0, 0.31, 0.2],
-    [0, 0.39, 0.34],
-  ];
-
-  return (
-    <group>
-      {Array.from({ length: 5 }, (_, frond) => (
-        <group
-          key={frond}
-          rotation={[0, (frond / 5) * Math.PI * 2, 0]}
-          scale={0.85 + (frond % 3) * 0.08}
-        >
-          {points.slice(1).map((point, segment) => (
-            <EdenPlantStem
-              key={`stem-${segment}`}
-              start={points[segment]!}
-              end={point}
-              radius={0.009}
-            />
-          ))}
-
-          {points.slice(1).map(([x, y, z], row) =>
-            [-1, 1].map((side) => (
-              <EdenLeaf
-                key={`leaf-${row}-${side}`}
-                position={[x + side * 0.06, y + 0.04, z + 0.015]}
-                rotation={[0.35, 0, -side]}
-                length={0.18 - row * 0.035}
-                width={0.065 - row * 0.01}
-                color={(frond + row) % 2 === 0 ? "#75bb78" : "#409566"}
-              />
-            )),
-          )}
-
-          <EdenLeaf
-            position={[0, 0.42, 0.39]}
-            rotation={[1, 0, 0]}
-            length={0.16}
-            width={0.055}
-            color="#8acb86"
-          />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-function EdenFlowers({ seed }: { seed: number }) {
-  const petalColors = ["#eaa6b2", "#f0d28d", "#c0afe5", "#f3e9cf"];
-  const petalColor = petalColors[seed % petalColors.length];
-
-  const stalks = [
-    { x: -0.16, z: 0.02, height: 0.61 },
-    { x: 0.15, z: 0.07, height: 0.47 },
-    { x: 0.02, z: -0.14, height: 0.76 },
-  ];
-
-  return (
-    <group>
-      {stalks.map(({ x, z, height }, index) => (
-        <group
-          key={index}
-          position={[x, 0, z]}
-          rotation={[0, index * 1.7, 0]}
-        >
-          <EdenPlantStem
-            start={[0, 0, 0]}
-            end={[0, height, 0]}
-            radius={0.014}
-          />
-
-          {[-1, 1].map((side) => (
-            <EdenLeaf
-              key={side}
-              position={[
-                side * 0.08,
-                height * (side === -1 ? 0.3 : 0.55) + 0.08,
-                0,
-              ]}
-              rotation={[0, 0, -side * 0.75]}
-              length={0.24}
-              width={0.095}
-              color={side === -1 ? "#599e65" : "#83ba75"}
-            />
-          ))}
-
-          {/* Flower head faces upward, with a slight natural tilt. */}
-          <group
-            position={[0, height, 0]}
-            rotation={[0.14, index * 0.8, 0.08]}
-            scale={0.8 + (index % 2) * 0.15}
-          >
-            {Array.from({ length: 6 }, (_, petal) => (
-              <group
-                key={petal}
-                rotation={[0, (petal / 6) * Math.PI * 2, 0]}
-              >
-                <mesh position={[0, 0, 0.105]} scale={[0.065, 0.025, 0.105]} castShadow>
-                  <sphereGeometry args={[1, 8, 5]} />
-                  <meshStandardMaterial
-                    color={petalColor}
-                    roughness={0.8}
-                  />
-                </mesh>
-              </group>
-            ))}
-
-            <mesh position={[0, 0.025, 0]} scale={[1, 0.5, 1]} castShadow>
-              <sphereGeometry args={[0.065, 8, 6]} />
-              <meshStandardMaterial color="#d5a24e" roughness={0.95} />
-            </mesh>
-          </group>
-        </group>
-      ))}
-    </group>
-  );
-}
-
-function EdenShrub({ seed }: { seed: number }) {
-  const clusters = [
-    [-0.2, 0.26, 0.02, 0.22],
-    [0.2, 0.27, 0.05, 0.23],
-    [0, 0.28, -0.18, 0.24],
-    [0, 0.42, 0.01, 0.27],
-  ];
-
-  return (
-    <group>
-      <EdenPlantStem
-        start={[0, 0, 0]}
-        end={[0, 0.27, 0]}
-        radius={0.035}
-        color="#817152"
+    <group position={position} rotation={[0, rotation, 0]}>
+      <Block
+        position={[0, 0, 0]}
+        size={[size[0] + 0.035, size[1] + 0.035, 0.025]}
+        color="#f5ecdc"
       />
 
-      {clusters.map(([x, y, z, radius], index) => (
-        <EdenFoliage
-          key={index}
-          position={[x, y, z]}
-          radius={radius}
-          color={index % 2 === 0 ? "#478d61" : "#71aa69"}
-        />
-      ))}
-
-      {/* Some shrubs have small berries. */}
-      {seed % 3 === 0 &&
-        Array.from({ length: 5 }, (_, berry) => {
-          const angle = berry * 2.4;
-
-          return (
-            <mesh
-              key={berry}
-              position={[
-                Math.cos(angle) * 0.22,
-                0.46 + (berry % 2) * 0.08,
-                Math.sin(angle) * 0.22,
-              ]}
-              castShadow
-            >
-              <sphereGeometry args={[0.027, 6, 4]} />
-              <meshStandardMaterial color="#df927d" roughness={0.8} />
-            </mesh>
-          );
-        })}
-    </group>
-  );
-}
-
-function EdenTree({ seed }: { seed: number }) {
-  const colors = ["#548e60", "#73a866", "#8bb774"];
-  const crowns = [
-    [0, 1.02, 0, 0.33],
-    [-0.23, 0.89, 0.03, 0.27],
-    [0.22, 0.92, 0.02, 0.28],
-    [0, 0.95, -0.23, 0.26],
-    [0.04, 1.23, -0.025, 0.25],
-  ];
-
-  return (
-    <group>
-      <EdenPlantStem
-        start={[0, 0, 0]}
-        end={[0, 0.98, 0]}
-        radius={0.075}
-        color="#977652"
+      <Block
+        position={[0, 0, 0.017]}
+        size={[size[0], size[1], 0.015]}
+        color="#83b7bd"
       />
 
-      {[-1, 1].map((side) => (
-        <EdenPlantStem
-          key={side}
-          start={[0, 0.53, 0]}
-          end={[side * 0.23, 0.89, 0.03]}
-          radius={0.028}
-          color="#977652"
-        />
-      ))}
-
-      {crowns.map(([x, y, z, radius], index) => (
-        <EdenFoliage
-          key={index}
-          position={[x, y, z]}
-          radius={radius}
-          color={colors[(seed + index) % colors.length]}
-        />
-      ))}
+      <Block
+        position={[0, 0, 0.03]}
+        size={[0.012, size[1], 0.012]}
+        color="#f7efdb"
+      />
     </group>
   );
 }
 
-function EdenGrass({ seed }: { seed: number }) {
-  return (
-    <group>
-      {Array.from({ length: 7 }, (_, blade) => {
-        const length = 0.42 + (blade % 3) * 0.1;
-        const tilt = 0.2 + (blade % 3) * 0.16;
-
-        return (
-          <group key={blade} rotation={[0, blade * 2.4, 0]}>
-            <EdenLeaf
-              position={[
-                0,
-                (length / 2) * Math.cos(tilt),
-                (length / 2) * Math.sin(tilt),
-              ]}
-              rotation={[tilt, 0, 0]}
-              length={length}
-              width={0.055}
-              color={(seed + blade) % 2 === 0 ? "#93bd76" : "#619c64"}
-            />
-          </group>
-        );
-      })}
-    </group>
-  );
-}
-
-function EdenPlantModel({
-  species,
+function TinyTree({
+  position,
   seed,
+  scale = 1,
 }: {
-  species: string;
+  position: [number, number, number];
   seed: number;
+  scale?: number;
 }) {
-  switch (species) {
-    case "fern":
-      return <EdenFern />;
-    case "flower":
-      return <EdenFlowers seed={seed} />;
-    case "tree":
-      return <EdenTree seed={seed} />;
-    case "grass":
-      return <EdenGrass seed={seed} />;
-    case "shrub":
-    default:
-      return <EdenShrub seed={seed} />;
-  }
+  const height = (0.3 + random(seed, 1) * 0.2) * scale;
+  const radius = (0.13 + random(seed, 2) * 0.07) * scale;
+
+  return (
+    <group position={position}>
+      <mesh position={[0, height / 2, 0]} castShadow>
+        <cylinderGeometry
+          args={[0.02 * scale, 0.035 * scale, height, 7]}
+        />
+        <meshStandardMaterial color="#8b7055" />
+      </mesh>
+
+      <mesh
+        position={[0, height + radius * 0.35, 0]}
+        castShadow
+      >
+        <icosahedronGeometry args={[radius, 1]} />
+        <meshStandardMaterial
+          color={random(seed, 3) > 0.5 ? "#72aa75" : "#50956c"}
+          roughness={1}
+          flatShading
+        />
+      </mesh>
+    </group>
+  );
 }
 
-function PlantMesh({ item }: { item: Plant }) {
-  const at = cellPoint(item.gridPosition.x, item.gridPosition.z, 6, 6);
+// --------------------------------------------------
+// Buildings
+// --------------------------------------------------
 
-  // A repeatable seed prevents plants changing appearance on rerenders.
-  const seed = Array.from(String(item.id)).reduce(
-    (hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0,
-    0,
+function BuildingMesh({ item }: { item: Building }) {
+  const seed = hashString(item.id);
+
+  const kind: BuildingKind =
+    item.kind ??
+    (item.variantId === "solar-workshop" ? "workshop" : "house");
+
+  const level = Math.max(1, Math.min(5, item.level ?? 1));
+  const nature = Math.max(0, Math.min(1, item.natureGrowth ?? 0));
+
+  const center = cellPoint(
+    item.gridPosition.x + (item.footprint.width - 1) / 2,
+    item.gridPosition.z + (item.footprint.depth - 1) / 2
   );
 
-  // Assumes growth runs from 0 to 1.
-  const growth = Math.max(0, Math.min(1, item.growth));
-  const variation = 0.9 + (seed % 11) * 0.02;
-  const size = (0.3 + growth * 0.7) * variation;
-  const rotation = ((seed % 360) / 180) * Math.PI;
+  const palette = PALETTES[seed % PALETTES.length];
+
+  // Tiny randomized building dimensions.
+  const width =
+    (0.48 + random(seed, 4) * 0.22) *
+    item.footprint.width;
+
+  const depth =
+    (0.45 + random(seed, 5) * 0.2) *
+    item.footprint.depth;
+
+  const height =
+    (0.28 + (level - 1) * 0.085) *
+    (0.85 + random(seed, 6) * 0.3);
+
+  const base = 0.035;
+  const top = base + height;
+  const front = depth / 2;
+
+  const flatRoof = kind !== "house" && kind !== "cafe";
+
+  const roofHeight = 0.1 + random(seed, 7) * 0.07;
+
+  const floorCount = Math.min(level, 4);
+
+  const accent: Record<BuildingKind, string> = {
+    house: "#bd9271",
+    workshop: "#568f85",
+    school: "#d3a454",
+    library: "#907da6",
+    restaurant: "#c96f65",
+    cafe: "#9d785b",
+    arcade: "#ac78cb",
+    "recreation-center": "#7ab39a",
+  };
+
+  const buildingAccent = accent[kind];
 
   return (
     <group
-      position={[at.x, 0, at.z]}
-      rotation={[0, rotation, 0]}
-      scale={size}
+      position={[center.x, 0, center.z]}
+      rotation={[0, item.rotation, 0]}
     >
-      <EdenPlantModel species={item.species} seed={seed} />
+      {/* Foundation */}
+      <Block
+        position={[0, base / 2, 0]}
+        size={[width + 0.1, base, depth + 0.1]}
+        color="#b5b9a4"
+      />
+
+      {/* Main structure */}
+      <Block
+        position={[0, base + height / 2, 0]}
+        size={[width, height, depth]}
+        color={palette.wall}
+      />
+
+      {/* Trim */}
+      <Block
+        position={[0, top - 0.025, 0]}
+        size={[width + 0.025, 0.03, depth + 0.025]}
+        color={palette.trim}
+      />
+
+      {/* Windows */}
+      {Array.from({ length: floorCount }, (_, floor) => {
+        const y =
+          base +
+          ((floor + 0.5) / floorCount) * height;
+
+        const windowHeight = Math.min(
+          0.11,
+          (height / floorCount) * 0.5
+        );
+
+        return (
+          <group key={`floor-${floor}`}>
+            {[-1, 1].map((side) => (
+              <group key={side}>
+                <Window
+                  position={[
+                    side * width * 0.26,
+                    y,
+                    front + 0.015,
+                  ]}
+                  size={[0.105, windowHeight]}
+                />
+
+                <Window
+                  position={[
+                    side * width * 0.26,
+                    y,
+                    -front - 0.015,
+                  ]}
+                  rotation={Math.PI}
+                  size={[0.105, windowHeight]}
+                />
+              </group>
+            ))}
+          </group>
+        );
+      })}
+
+      {/* Door */}
+      <Block
+        position={[0, base + 0.1, front + 0.02]}
+        size={[0.13, 0.2, 0.035]}
+        color={buildingAccent}
+      />
+
+      {/* Roof */}
+      {flatRoof ? (
+        <Block
+          position={[0, top + 0.025, 0]}
+          size={[width + 0.085, 0.05, depth + 0.085]}
+          color={palette.roof}
+        />
+      ) : (
+        <mesh
+          position={[0, top + roofHeight / 2, 0]}
+          rotation={[0, Math.PI / 4, 0]}
+          castShadow
+        >
+          <coneGeometry
+            args={[
+              Math.max(width, depth) * 0.76,
+              roofHeight,
+              4,
+            ]}
+          />
+          <meshStandardMaterial
+            color={palette.roof}
+            roughness={0.9}
+            flatShading
+          />
+        </mesh>
+      )}
+
+      {/* Workshop solar panels */}
+      {kind === "workshop" &&
+        [-1, 1].map((side) => (
+          <Block
+            key={side}
+            position={[
+              side * width * 0.23,
+              top + 0.06,
+              0,
+            ]}
+            size={[width * 0.3, 0.018, depth * 0.45]}
+            color="#3d687d"
+          />
+        ))}
+
+      {/* School clock */}
+      {kind === "school" && (
+        <mesh position={[0, top - 0.1, front + 0.03]}>
+          <cylinderGeometry args={[0.055, 0.055, 0.02, 16]} />
+          <meshStandardMaterial color="#fff3d5" />
+        </mesh>
+      )}
+
+      {/* Library columns */}
+      {kind === "library" &&
+        [-1, 1].map((side) => (
+          <mesh
+            key={side}
+            position={[
+              side * width * 0.34,
+              base + 0.11,
+              front + 0.06,
+            ]}
+            castShadow
+          >
+            <cylinderGeometry args={[0.025, 0.03, 0.22, 8]} />
+            <meshStandardMaterial color="#f5ebdb" />
+          </mesh>
+        ))}
+
+      {/* Restaurant/cafe awning */}
+      {(kind === "restaurant" || kind === "cafe") && (
+        <Block
+          position={[0, base + 0.24, front + 0.09]}
+          size={[width * 0.75, 0.035, 0.18]}
+          color={buildingAccent}
+        />
+      )}
+
+      {/* Arcade neon */}
+      {kind === "arcade" && (
+        <Block
+          position={[0, top - 0.09, front + 0.035]}
+          size={[width * 0.7, 0.055, 0.03]}
+          color="#cf95ef"
+        />
+      )}
+
+      {/* Recreation center skylight */}
+      {kind === "recreation-center" && (
+        <Block
+          position={[0, top + 0.055, 0]}
+          size={[width * 0.4, 0.015, depth * 0.35]}
+          color="#a4d6d3"
+        />
+      )}
+
+      {/* Moss */}
+      {Array.from(
+        { length: Math.floor(nature * 8) },
+        (_, index) => {
+          const x =
+            (random(seed, index + 20) - 0.5) *
+            width *
+            0.8;
+
+          const y =
+            base +
+            random(seed, index + 40) *
+              height *
+              0.7;
+
+          const side = index % 2 === 0 ? 1 : -1;
+
+          return (
+            <Block
+              key={`moss-${index}`}
+              position={[x, y, side * (front + 0.015)]}
+              size={[0.05, 0.045, 0.015]}
+              color={
+                index % 2 === 0
+                  ? "#609c63"
+                  : "#83ae69"
+              }
+            />
+          );
+        }
+      )}
+
+      {/* Vines */}
+      {Array.from(
+        { length: Math.floor(nature * 4) },
+        (_, index) => {
+          const x =
+            (random(seed, index + 60) - 0.5) *
+            width *
+            0.7;
+
+          const vineHeight =
+            height *
+            (0.25 + random(seed, index + 70) * 0.45);
+
+          return (
+            <Block
+              key={`vine-${index}`}
+              position={[
+                x,
+                top - vineHeight / 2,
+                front + 0.02,
+              ]}
+              size={[0.02, vineHeight, 0.02]}
+              color="#4d9258"
+            />
+          );
+        }
+      )}
+
+      {/* Rooftop greenery */}
+      {flatRoof &&
+        Array.from(
+          { length: Math.floor(nature * 3) },
+          (_, index) => (
+            <mesh
+              key={`roof-plant-${index}`}
+              position={[
+                (index - 1) * width * 0.22,
+                top + 0.09,
+                -depth * 0.2,
+              ]}
+              castShadow
+            >
+              <icosahedronGeometry args={[0.06, 1]} />
+              <meshStandardMaterial
+                color="#70aa72"
+                flatShading
+              />
+            </mesh>
+          )
+        )}
+
+      {/* Tiny trees */}
+      {nature >= 0.5 && (
+        <TinyTree
+          position={[
+            width / 2 + 0.12,
+            0,
+            -depth / 2 - 0.08,
+          ]}
+          seed={seed}
+          scale={0.4}
+        />
+      )}
+
+      {nature >= 0.9 && (
+        <TinyTree
+          position={[
+            -width / 2 - 0.12,
+            0,
+            depth / 2 + 0.08,
+          ]}
+          seed={seed + 13}
+          scale={0.35}
+        />
+      )}
     </group>
   );
 }
 
-function ResidentMesh({ item }: { item: Resident }) {
+// --------------------------------------------------
+// Plants
+// --------------------------------------------------
+
+function PlantMesh({ item }: { item: Plant }) {
+  const center = cellPoint(
+    item.gridPosition.x,
+    item.gridPosition.z
+  );
+
+  const seed = hashString(item.id);
+  const growth = Math.max(0.1, item.growth);
+
+  if (item.species === "fern") {
+    return (
+      <group position={[center.x, 0, center.z]}>
+        {Array.from({ length: 5 }, (_, index) => {
+          const angle = (index / 5) * Math.PI * 2;
+
+          return (
+            <mesh
+              key={index}
+              position={[
+                Math.cos(angle) * 0.06,
+                0.09 * growth,
+                Math.sin(angle) * 0.06,
+              ]}
+              rotation={[0, angle, 0.6]}
+              castShadow
+            >
+              <coneGeometry
+                args={[0.065, 0.22 * growth, 5]}
+              />
+              <meshStandardMaterial
+                color="#5e9b70"
+                flatShading
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
   return (
-    <mesh
-      position={[
-        (item.position.x / 2) * (BOARD_SIZE / GRID_SIZE),
-        0.15,
-        (item.position.z / 2) * (BOARD_SIZE / GRID_SIZE),
-      ]}
-    >
-      <capsuleGeometry args={[0.09, 0.18, 3, 6]} />
-      <meshStandardMaterial color="#e9b66e" />
-    </mesh>
+    <TinyTree
+      position={[center.x, 0, center.z]}
+      seed={seed}
+      scale={0.45 + growth * 0.3}
+    />
   );
 }
 
-const ISLAND_RADIUS = 6.4;
+// --------------------------------------------------
+// Residents
+// --------------------------------------------------
+
+function ResidentMesh({ item }: { item: Resident }) {
+  const seed = hashString(item.id);
+
+  const color = [
+    "#e5b58e",
+    "#8ab7b0",
+    "#b4a0ce",
+    "#d4b16d",
+  ][seed % 4];
+
+  return (
+    <group
+      position={[
+        item.position.x,
+        0,
+        item.position.z,
+      ]}
+    >
+      <mesh position={[0, 0.09, 0]} castShadow>
+        <capsuleGeometry args={[0.04, 0.1, 4, 8]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+
+      <mesh position={[0, 0.2, 0]} castShadow>
+        <sphereGeometry args={[0.055, 10, 8]} />
+        <meshStandardMaterial color="#e8c6a5" />
+      </mesh>
+    </group>
+  );
+}
+
+// --------------------------------------------------
+// Circular island
+// --------------------------------------------------
 
 function CircularTerrain({ night }: { night: boolean }) {
   return (
     <group>
-      {/* Circular ground */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.04, 0]}
+        position={[0, -0.035, 0]}
         receiveShadow
       >
         <circleGeometry args={[ISLAND_RADIUS, 96]} />
         <meshStandardMaterial
-          color={night ? "#24545a" : "#72b6a0"}
-          roughness={0.92}
+          color={night ? "#315b56" : "#87b99a"}
+          roughness={0.96}
         />
       </mesh>
 
-      {/* Floating island thickness */}
-      <mesh position={[0, -0.3, 0]} receiveShadow castShadow>
-        <cylinderGeometry args={[ISLAND_RADIUS, ISLAND_RADIUS - 0.25, 0.5, 96]} />
+      <mesh
+        position={[0, -0.32, 0]}
+        castShadow
+        receiveShadow
+      >
+        <cylinderGeometry
+          args={[
+            ISLAND_RADIUS,
+            ISLAND_RADIUS - 0.24,
+            0.56,
+            96,
+          ]}
+        />
         <meshStandardMaterial
-          color={night ? "#183e43" : "#527e69"}
+          color={night ? "#264d49" : "#678d73"}
           roughness={0.95}
         />
       </mesh>
 
-      {/* Decorative outer rim */}
-      <mesh position={[0, -0.02, 0]}>
-        <torusGeometry args={[ISLAND_RADIUS, 0.045, 8, 96]} />
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.015, 0]}
+      >
+        <torusGeometry
+          args={[ISLAND_RADIUS, 0.04, 8, 96]}
+        />
         <meshStandardMaterial
-          color="#a3d8c3"
+          color="#c4e6d6"
           metalness={0.25}
-          roughness={0.4}
+          roughness={0.35}
         />
       </mesh>
     </group>
   );
 }
+
+// --------------------------------------------------
+// Glass dome
+// --------------------------------------------------
+
 function GlassDome() {
   const radius = ISLAND_RADIUS + 0.25;
   const height = 7;
 
-  const domeGeometry = useMemo(() => {
+  const geometry = useMemo(() => {
     const points: THREE.Vector2[] = [];
 
-    const segments = 64;
+    for (let i = 0; i <= 64; i++) {
+      const r = (i / 64) * radius;
 
-    for (let i = 0; i <= segments; i++) {
-      const r = (i / segments) * radius;
-
-      // Paraboloid equation
-      const y = height * (1 - (r * r) / (radius * radius));
+      const y =
+        height * (1 - (r * r) / (radius * radius));
 
       points.push(new THREE.Vector2(r, y));
     }
 
     return new THREE.LatheGeometry(points, 128);
-  }, [radius, height]);
+  }, [radius]);
 
   useEffect(() => {
-    return () => domeGeometry.dispose();
-  }, [domeGeometry]);
+    return () => geometry.dispose();
+  }, [geometry]);
 
   return (
     <group>
-      {/* Full 3D transparent glass enclosure */}
-      <mesh geometry={domeGeometry}>
+      <mesh geometry={geometry}>
         <meshPhysicalMaterial
-          color="#c5f3ff"
+          color="#d7f6f0"
           transparent
-          opacity={0.2}
-          roughness={0.04}
+          opacity={0.075}
+          roughness={0.08}
           metalness={0}
-          transmission={0}
-          depthWrite={false}
           side={THREE.DoubleSide}
+          depthWrite={false}
         />
       </mesh>
 
-      {/* Circular structural ring at the bottom */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[radius, 0.055, 12, 128]} />
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.015, 0]}
+      >
+        <torusGeometry
+          args={[radius, 0.025, 8, 128]}
+        />
         <meshStandardMaterial
-          color="#a6e7ed"
-          metalness={0.55}
-          roughness={0.2}
+          color="#d0f5eb"
+          transparent
+          opacity={0.5}
         />
       </mesh>
-
-      {/* Horizontal reinforcement rings following dome curvature */}
-      {[0.3, 0.6, 0.85].map((fraction) => {
-        const r = radius * fraction;
-        const y = height * (1 - fraction * fraction);
-
-        return (
-          <mesh
-            key={fraction}
-            position={[0, y, 0]}
-            rotation={[-Math.PI / 2, 0, 0]}
-          >
-            <torusGeometry args={[r, 0.018, 8, 128]} />
-            <meshStandardMaterial
-              color="#b5f0f4"
-              transparent
-              opacity={0.5}
-              metalness={0.4}
-              roughness={0.2}
-            />
-          </mesh>
-        );
-      })}
-
-      {/* Curved vertical ribs from top to base */}
-      {Array.from({ length: 12 }, (_, index) => {
-        const angle = (index / 12) * Math.PI * 2;
-
-        const curvePoints = Array.from({ length: 65 }, (_, i) => {
-          const r = (i / 64) * radius;
-          const y = height * (1 - (r * r) / (radius * radius));
-
-          return new THREE.Vector3(
-            r * Math.cos(angle),
-            y,
-            r * Math.sin(angle)
-          );
-        });
-
-        const curve = new THREE.CatmullRomCurve3(curvePoints);
-
-        return (
-          <mesh key={index}>
-            <tubeGeometry args={[curve, 64, 0.018, 6, false]} />
-            <meshStandardMaterial
-              color="#a6e7ed"
-              transparent
-              opacity={0.45}
-              metalness={0.5}
-              roughness={0.2}
-            />
-          </mesh>
-        );
-      })}
     </group>
   );
 }
+
+// --------------------------------------------------
+// World scene
+// --------------------------------------------------
 
 function World() {
   const buildings = useWorldStore(selectBuildings);
@@ -1013,89 +780,66 @@ function World() {
 
   return (
     <>
-      <color attach="background" args={[night ? "#102b36" : "#a9d9d5"]} />
-      <fog attach="fog" args={[night ? "#102b36" : "#a9d9d5", 5, 30]} />
-      <ambientLight intensity={night ? 0.55 : 1.15} color={night ? "#83b5dc" : "#fff2cf"} />
+      <color
+        attach="background"
+        args={[night ? "#102a35" : "#b7deda"]}
+      />
+
+      <ambientLight
+        intensity={night ? 0.8 : 1.5}
+        color={night ? "#9bbbdc" : "#fff4df"}
+      />
+
       <directionalLight
-        position={[-4, 7, 5]}
-        intensity={night ? 0.65 : 2.2}
-        color={night ? "#9bc7ff" : "#fff4d1"}
+        position={[-5, 9, 6]}
+        intensity={night ? 1.1 : 2.4}
+        color={night ? "#b2d0ff" : "#fff2d4"}
         castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-10}
+        shadow-camera-right={10}
+        shadow-camera-top={10}
+        shadow-camera-bottom={-10}
       />
 
       <CircularTerrain night={night} />
 
-  
-
-      {buildings.map((item) => (
+      {buildings.map((building) => (
         <BuildingMesh
-          key={item.id}
-          item={item}
+          key={building.id}
+          item={building}
         />
       ))}
 
-      {plants.map((item) => (
-        <PlantMesh
-          key={item.id}
-          item={item}
-        />
+      {plants.map((plant) => (
+        <PlantMesh key={plant.id} item={plant} />
       ))}
 
-      {residents.map((item) => (
+      {residents.map((resident) => (
         <ResidentMesh
-          key={item.id}
-          item={item}
+          key={resident.id}
+          item={resident}
         />
       ))}
+
       <GlassDome />
 
       <OrbitControls
         enablePan={false}
-        minDistance={10}
+        minDistance={9}
         maxDistance={30}
-        maxPolarAngle={Math.PI / 2.15}
+        maxPolarAngle={Math.PI / 2.12}
+        target={[0, 0.5, 0]}
       />
     </>
   );
 }
 
+// --------------------------------------------------
+// App
+// --------------------------------------------------
+
 function App() {
-    const setSystemIdle = useWorldStore(
-    (state) => state.setSystemIdle
-  );
-
-  useEffect(() => {
-    const api = window.edenAPI;
-
-    if (!api) return;
-
-    let mounted = true;
-    let latestTimestamp = -Infinity;
-
-    const handleActivity = (activity: {
-      status: "active" | "idle";
-      timestamp: number;
-    }) => {
-      if (!mounted || activity.timestamp < latestTimestamp) return;
-
-      latestTimestamp = activity.timestamp;
-      setSystemIdle(activity.status === "idle");
-    };
-
-    const unsubscribe = api.onActivityChanged(handleActivity);
-
-    api.getCurrentActivity()
-      .then((activity) => {
-        if (activity) handleActivity(activity);
-      })
-      .catch(console.error);
-
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
-  }, [setSystemIdle]);
-  // Simulation state
   const advanceTime = useWorldStore(
     (state) => state.advanceTime
   );
@@ -1108,9 +852,11 @@ function App() {
     (state) => state.setActivityCategory
   );
 
-  const activity = useWorldStore(selectActivity);
+  const setSystemIdle = useWorldStore(
+    (state) => state.setSystemIdle
+  );
 
-  // Building state
+  const activity = useWorldStore(selectActivity);
   const buildings = useWorldStore(selectBuildings);
 
   const addBuilding = useWorldStore(
@@ -1121,15 +867,57 @@ function App() {
     (state) => state.resetWorld
   );
 
-  // Simulation timer and activity tracking
-    // Simulation timer and activity tracking
+  // Electron idle monitoring.
+  useEffect(() => {
+    const api = window.edenAPI;
+
+    if (!api) return;
+
+    let mounted = true;
+    let latestTimestamp = -Infinity;
+
+    const handleActivity = (result: {
+      status: "active" | "idle";
+      timestamp: number;
+    }) => {
+      if (
+        !mounted ||
+        result.timestamp < latestTimestamp
+      ) {
+        return;
+      }
+
+      latestTimestamp = result.timestamp;
+
+      setSystemIdle(result.status === "idle");
+    };
+
+    const unsubscribe =
+      api.onActivityChanged(handleActivity);
+
+    api.getCurrentActivity()
+      .then((result) => {
+        if (result) handleActivity(result);
+      })
+      .catch(console.error);
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [setSystemIdle]);
+
+  // Simulation timer.
   useEffect(() => {
     let previous = Date.now();
 
     const timer = window.setInterval(() => {
       const now = Date.now();
 
-      advanceTime((now - previous) / 1000, now);
+      advanceTime(
+        (now - previous) / 1000,
+        now
+      );
 
       previous = now;
     }, 1000);
@@ -1138,19 +926,19 @@ function App() {
       if (
         event instanceof KeyboardEvent &&
         event.altKey &&
-        ["1", "2"].includes(event.key)
+        (event.key === "1" || event.key === "2")
       ) {
         event.preventDefault();
 
         setActivityCategory(
-          event.key === "1" ? "productivity" : "leisure"
+          event.key === "1"
+            ? "productivity"
+            : "leisure"
         );
 
         return;
       }
 
-      // Only track window input when running in a browser.
-      // Electron already tracks activity across the entire Mac.
       if (!window.edenAPI) {
         recordInput();
       }
@@ -1162,63 +950,104 @@ function App() {
 
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener("pointerdown", onInput);
-      window.removeEventListener("keydown", onInput);
-      window.removeEventListener("wheel", onInput);
+
+      window.removeEventListener(
+        "pointerdown",
+        onInput
+      );
+
+      window.removeEventListener(
+        "keydown",
+        onInput
+      );
+
+      window.removeEventListener(
+        "wheel",
+        onInput
+      );
     };
-  }, [advanceTime, recordInput, setActivityCategory]);
-  
-  // Find the first available 2x2 space
+  }, [
+    advanceTime,
+    recordInput,
+    setActivityCategory,
+  ]);
+
+  // Random test building.
   function handleAddBuilding() {
-    for (
-      let z = 0;
-      z < GRID_SIZE;
-      z += BUILDING_SIZE
-    ) {
-      for (
-        let x = 0;
-        x < GRID_SIZE;
-        x += BUILDING_SIZE
-      ) {
-        const occupied = buildings.some(
-          (building) =>
-            x <
-              building.gridPosition.x +
-                building.footprint.width &&
-            x + BUILDING_SIZE >
-              building.gridPosition.x &&
-            z <
-              building.gridPosition.z +
-                building.footprint.depth &&
-            z + BUILDING_SIZE >
-              building.gridPosition.z
-        );
+    const available: { x: number; z: number }[] = [];
 
-        if (!occupied) {
-          addBuilding({
-            type: "building",
-            id: crypto.randomUUID(),
-            variantId: "solar-house",
-            name: "Solar House",
-            gridPosition: { x, z },
-            footprint: {
-              width: BUILDING_SIZE,
-              depth: BUILDING_SIZE,
-            },
-            rotation: 0,
-            createdAt: Date.now(),
-          });
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let z = 0; z < GRID_SIZE; z++) {
+        const overlaps = buildings.some((building) => {
+          const bx = building.gridPosition.x;
+          const bz = building.gridPosition.z;
 
-          return;
+          return (
+            x < bx + building.footprint.width &&
+            x + 1 > bx &&
+            z < bz + building.footprint.depth &&
+            z + 1 > bz
+          );
+        });
+
+        if (!overlaps) {
+          available.push({ x, z });
         }
       }
     }
 
-    alert("The 6x6 grid is full!");
+    if (available.length === 0) {
+      window.alert(
+        "The island is full! All 36 grid cells are occupied."
+      );
+      return;
+    }
+
+    const position =
+      available[
+        Math.floor(Math.random() * available.length)
+      ];
+
+    const definition =
+      BUILDING_TYPES[
+        Math.floor(
+          Math.random() * BUILDING_TYPES.length
+        )
+      ];
+
+    const rotation =
+      Math.floor(Math.random() * 4) *
+      (Math.PI / 2);
+
+    addBuilding({
+      type: "building",
+      id: crypto.randomUUID(),
+
+      name: definition.name,
+      variantId: definition.variantId,
+      kind: definition.kind,
+
+      level: 1,
+      natureGrowth: 0,
+
+      gridPosition: position,
+
+      footprint: {
+        width: 1,
+        depth: 1,
+      },
+
+      rotation,
+      createdAt: Date.now(),
+    });
   }
 
   function handleResetWorld() {
-    if (window.confirm("Reset the entire world?")) {
+    if (
+      window.confirm(
+        "Reset the world and start a new city?"
+      )
+    ) {
       resetWorld();
     }
   }
@@ -1228,7 +1057,6 @@ function App() {
       className="app"
       style={{ position: "relative" }}
     >
-      {/* 3D environment */}
       <Canvas
         shadows
         camera={{
@@ -1240,7 +1068,6 @@ function App() {
         <World />
       </Canvas>
 
-      {/* Building controls */}
       <div
         style={{
           position: "absolute",
@@ -1258,14 +1085,28 @@ function App() {
         }}
       >
         <strong>
-          Buildings: {buildings.length}
+          Buildings: {buildings.length} / 36
         </strong>
+
+        <span>
+          Productivity:{" "}
+          {Math.floor(activity.productivityPoints)}s
+        </span>
+
+        <span>
+          Leisure:{" "}
+          {Math.floor(activity.leisurePoints)}s
+        </span>
+
+        <span>
+          Mode: {activity.category}
+        </span>
 
         <button
           type="button"
           onClick={handleAddBuilding}
         >
-          Add Test Building
+          Add Random Building
         </button>
 
         <button
@@ -1276,12 +1117,10 @@ function App() {
         </button>
       </div>
 
-      {/* EDEN.EXE branding */}
       <div className="wordmark">
         EDEN<span>.EXE</span>
       </div>
 
-      {/* Activity status */}
       <div className="status">
         <i className={activity.category} />
         {activity.category}
