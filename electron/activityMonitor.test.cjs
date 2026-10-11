@@ -26,11 +26,11 @@ const {
 
 Module._load = originalLoad;
 
-test("Idle threshold is 10 seconds", () => {
+test("Idle threshold remains 10 seconds", () => {
   assert.equal(IDLE_THRESHOLD_SECONDS, 10);
 });
 
-test("Activity polling interval is 2 seconds", () => {
+test("Polling remains every 2 seconds", () => {
   assert.equal(CHECK_INTERVAL_MS, 2000);
 });
 
@@ -38,15 +38,7 @@ test("VS Code is productivity", () => {
   assert.equal(classifyActivity("Code", "eden-exe"), "productivity");
 });
 
-test("Terminal is productivity", () => {
-  assert.equal(classifyActivity("Terminal", "zsh"), "productivity");
-});
-
-test("Spotify is leisure", () => {
-  assert.equal(classifyActivity("Spotify", "Music"), "leisure");
-});
-
-test("ChatGPT conversation title uses actual URL", () => {
+test("ChatGPT is productivity by URL", () => {
   assert.equal(
     classifyActivity(
       "Google Chrome",
@@ -57,71 +49,109 @@ test("ChatGPT conversation title uses actual URL", () => {
   );
 });
 
-test("GitHub repository page uses actual URL", () => {
+test("GitHub is productivity by URL", () => {
   assert.equal(
-    classifyActivity(
-      "Google Chrome",
-      "keviche/eden-exe",
-      "https://github.com/keviche/eden-exe"
-    ),
+    classifyUrl("https://github.com/keviche/eden-exe"),
     "productivity"
   );
 });
 
 test("Google Docs is productivity", () => {
   assert.equal(
-    classifyActivity(
-      "Google Chrome",
-      "Untitled document",
-      "https://docs.google.com/document/d/123/edit"
-    ),
+    classifyUrl("https://docs.google.com/document/d/123"),
+    "productivity"
+  );
+});
+
+test("LeetCode is productivity", () => {
+  assert.equal(
+    classifyUrl("https://leetcode.com/problems/two-sum"),
+    "productivity"
+  );
+});
+
+test("arXiv is productivity", () => {
+  assert.equal(
+    classifyUrl("https://arxiv.org/abs/1234.5678"),
     "productivity"
   );
 });
 
 test("YouTube is leisure", () => {
   assert.equal(
-    classifyActivity(
-      "Google Chrome",
-      "Video title",
-      "https://www.youtube.com/watch?v=123"
-    ),
+    classifyUrl("https://www.youtube.com/watch?v=123"),
     "leisure"
   );
 });
 
 test("Netflix is leisure", () => {
   assert.equal(
-    classifyActivity(
-      "Google Chrome",
-      "Movie title",
-      "https://www.netflix.com/watch/123"
-    ),
+    classifyUrl("https://www.netflix.com/watch/123"),
     "leisure"
   );
 });
 
-test("Domain matching includes subdomains", () => {
-  assert.equal(domainMatches("www.github.com", "github.com"), true);
-  assert.equal(domainMatches("github.com", "github.com"), true);
+test("Steam is leisure", () => {
+  assert.equal(
+    classifyUrl("https://store.steampowered.com/app/123"),
+    "leisure"
+  );
 });
 
-test("Lookalike domains do not match", () => {
+test("Spotify is leisure", () => {
+  assert.equal(
+    classifyUrl("https://open.spotify.com/track/123"),
+    "leisure"
+  );
+});
+
+test("Reddit is ambiguous", () => {
+  assert.equal(
+    classifyUrl("https://reddit.com/r/programming"),
+    "unknown"
+  );
+});
+
+test("LinkedIn is ambiguous", () => {
+  assert.equal(
+    classifyUrl("https://linkedin.com/feed"),
+    "unknown"
+  );
+});
+
+test("Google Search is ambiguous", () => {
+  assert.equal(
+    classifyUrl("https://www.google.com/search?q=python"),
+    "unknown"
+  );
+});
+
+test("Unknown websites stay internally unknown", () => {
+  assert.equal(
+    classifyUrl("https://example.com"),
+    "unknown"
+  );
+});
+
+test("Lookalike domains are not matched", () => {
   assert.equal(
     classifyUrl("https://github.com.evil.example"),
-    null
-  );
-  assert.equal(
-    classifyUrl("https://fakechatgpt.com"),
-    null
+    "unknown"
   );
 });
 
-test("URL classification takes precedence over misleading titles", () => {
+test("Specific subdomains are matched", () => {
+  assert.equal(
+    domainMatches("www.github.com", "github.com"),
+    true
+  );
+});
+
+test("URL classification overrides misleading titles", () => {
   assert.equal(
     classifyActivity(
       "Google Chrome",
-      "ChatGPT tutorial",
+      "ChatGPT Tutorial",
       "https://www.youtube.com/watch?v=123"
     ),
     "leisure"
@@ -130,26 +160,133 @@ test("URL classification takes precedence over misleading titles", () => {
 
 test("Notion remains productivity", () => {
   assert.equal(
+    classifyUrl("https://www.notion.so/workspace"),
+    "productivity"
+  );
+});
+
+test("Unsupported schemes are unknown", () => {
+  assert.equal(classifyUrl("chrome://settings"), "unknown");
+});
+
+
+test("Wikipedia is productivity", () => {
+  assert.equal(
+    classifyUrl("https://en.wikipedia.org/wiki/Computer_science"),
+    "productivity"
+  );
+});
+
+test("Wiktionary is productivity", () => {
+  assert.equal(
+    classifyUrl("https://en.wiktionary.org/wiki/algorithm"),
+    "productivity"
+  );
+});
+
+test("Merriam-Webster is productivity", () => {
+  assert.equal(
+    classifyUrl("https://www.merriam-webster.com/dictionary/algorithm"),
+    "productivity"
+  );
+});
+
+test("Dictionary.com is productivity", () => {
+  assert.equal(
+    classifyUrl("https://www.dictionary.com/browse/algorithm"),
+    "productivity"
+  );
+});
+
+test("Cambridge Dictionary is productivity", () => {
+  assert.equal(
+    classifyUrl("https://dictionary.cambridge.org/dictionary/english/algorithm"),
+    "productivity"
+  );
+});
+
+test("Oxford Learner's Dictionaries is productivity", () => {
+  assert.equal(
+    classifyUrl("https://www.oxfordlearnersdictionaries.com/definition/english/algorithm"),
+    "productivity"
+  );
+});
+
+test("Britannica is productivity", () => {
+  assert.equal(
+    classifyUrl("https://www.britannica.com/science/mathematics"),
+    "productivity"
+  );
+});
+
+test("Thesaurus.com is productivity", () => {
+  assert.equal(
+    classifyUrl("https://www.thesaurus.com/browse/learn"),
+    "productivity"
+  );
+});
+
+test("Google Translate is productivity", () => {
+  assert.equal(
+    classifyUrl("https://translate.google.com/"),
+    "productivity"
+  );
+});
+
+test("Wikipedia title fallback is productivity", () => {
+  assert.equal(
     classifyActivity(
       "Google Chrome",
-      "My Notes | Notion",
-      "https://www.notion.so/workspace"
+      "Algorithm - Wikipedia",
+      ""
     ),
     "productivity"
   );
 });
 
-test("Unrecognized Chrome website defaults to leisure", () => {
+test("Dictionary title fallback is productivity", () => {
   assert.equal(
     classifyActivity(
       "Google Chrome",
-      "Unknown page",
-      "https://example.com"
+      "Algorithm Definition - Merriam-Webster",
+      ""
     ),
+    "productivity"
+  );
+});
+
+test("Unrelated domains remain unknown", () => {
+  assert.equal(
+    classifyUrl("https://notwikipedia.org"),
+    "unknown"
+  );
+});
+
+test("YouTube remains leisure", () => {
+  assert.equal(
+    classifyUrl("https://www.youtube.com/watch?v=123"),
     "leisure"
   );
 });
 
-test("Unsupported URL schemes are ignored", () => {
-  assert.equal(classifyUrl("chrome://settings"), null);
+
+test("Gmail is productivity by URL", () => {
+  assert.equal(
+    classifyUrl("https://mail.google.com/mail/u/0/#inbox"),
+    "productivity"
+  );
+});
+
+test("Gmail is productivity by window title", () => {
+  assert.equal(
+    classifyActivity("Google Chrome", "Inbox (3) - Gmail", ""),
+    "productivity"
+  );
+});
+
+test("Gmail lookalike domains are not productivity", () => {
+  assert.equal(
+    classifyUrl("https://mail.google.com.evil.example"),
+    "unknown"
+  );
 });
