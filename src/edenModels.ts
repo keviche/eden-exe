@@ -13,7 +13,18 @@ export type Finish = "matte" | "glass" | "greenhouse" | "solar" | "metal";
 export type Part = { shape: Shape; finish: Finish; color: string; matrix: Matrix };
 export type Model = readonly Part[];
 export type GrowthSource = { createdAt: number; growth?: number };
-export type Plot = { gridPosition: { x: number; z: number }; footprint?: { width: number; depth: number } };
+export type Plot = {
+  gridPosition: {
+    x: number;
+    z: number;
+  };
+  footprint?: {
+    width: number;
+    depth: number;
+  };
+  species?: "tree" | "shrub" | "fern" | "flower" | "grass";
+};
+
 export type ResidentCoordinates = "legacy-centered" | "grid" | "world";
 // Matches the supplied ResidentMesh. Set to "grid" if residents use grid coordinates.
 export const RESIDENT_COORDINATES: ResidentCoordinates = "legacy-centered";
@@ -947,44 +958,301 @@ export function placeModel(model: Model, root: Matrix, output: Part[]) {
 }
 
 /** O(occupied cells + candidate cells); checks plants as well as buildings. */
-export function findFreePlot(buildings: readonly Plot[], plants: readonly Plot[], width: number, depth: number) {
-  if (!Number.isInteger(width) || !Number.isInteger(depth) || width < 1 || depth < 1 || width > GRID_SIZE || depth > GRID_SIZE) return null;
-  const occupied = new Uint8Array(GRID_SIZE * GRID_SIZE);
-  for (const item of [...buildings, ...plants]) {
-    const left = Math.floor(item.gridPosition.x), top = Math.floor(item.gridPosition.z);
-    const right = Math.ceil(item.gridPosition.x + (item.footprint?.width ?? 1));
-    const bottom = Math.ceil(item.gridPosition.z + (item.footprint?.depth ?? 1));
-    for (let z = Math.max(0, top); z < Math.min(GRID_SIZE, bottom); z++) {
-      for (let x = Math.max(0, left); x < Math.min(GRID_SIZE, right); x++) occupied[z * GRID_SIZE + x] = 1;
+function plotDistance(
+  ax: number,
+  az: number,
+  aw: number,
+  ad: number,
+  bx: number,
+  bz: number,
+  bw: number,
+  bd: number
+): number {
+  const dx = Math.max(
+    bx - (ax + aw),
+    ax - (bx + bw),
+    0
+  );
+
+  const dz = Math.max(
+    bz - (az + ad),
+    az - (bz + bd),
+    0
+  );
+
+  return Math.hypot(dx, dz);
+}
+
+
+function edenFootprintsOverlap(
+  ax: number, az: number, aw: number, ad: number,
+  bx: number, bz: number, bw: number, bd: number,
+  clearance = 0
+): boolean {
+  return (
+    ax < bx + bw + clearance - 0.0001 &&
+    ax + aw + clearance > bx + 0.0001 &&
+    az < bz + bd + clearance - 0.0001 &&
+    az + ad + clearance > bz + 0.0001
+  );
+}
+
+export function findFreePlot(
+  buildings: readonly Plot[],
+  plants: readonly Plot[],
+  width: number,
+  depth: number,
+  isValid?: (
+    x: number,
+    z: number,
+    width: number,
+    depth: number
+  ) => boolean
+) {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(depth) ||
+    width < 1 ||
+    depth < 1 ||
+    width > GRID_SIZE ||
+    depth > GRID_SIZE
+  ) return null;
+
+  const structures = buildings.filter(
+    item => item.footprint !== undefined
+  );
+
+  const candidates: {
+    x: number;
+    z: number;
+    score: number;
+  }[] = [];
+
+  for (let z = 0; z <= GRID_SIZE - depth; z++) {
+    for (let x = 0; x <= GRID_SIZE - width; x++) {
+      let blocked = false;
+      let nearestBuilding = Infinity;
+
+      // Buildings and residents always reserve space.
+      for (const item of buildings) {
+        const overlaps = edenFootprintsOverlap(
+          x, z, width, depth,
+          item.gridPosition.x,
+          item.gridPosition.z,
+          item.footprint?.width ?? 0.5,
+          item.footprint?.depth ?? 0.5
+        );
+
+        if (overlaps) {
+          blocked = true;
+          break;
+        }
+      }
+
+      if (blocked) continue;
+
+      // Only trees permanently reserve building space.
+      for (const plant of plants) {
+        if (plant.species !== "tree") continue;
+
+        const distance = plotDistance(
+          x, z, width, depth,
+          plant.gridPosition.x,
+          plant.gridPosition.z,
+          0.5, 0.5
+        );
+
+        // Larger safety zone for mature tree trunks.
+        if (distance < 0.95) {
+          blocked = true;
+          break;
+        }
+      }
+
+      if (blocked) continue;
+
+      for (const building of structures) {
+        const distance = plotDistance(
+          x, z, width, depth,
+          building.gridPosition.x,
+          building.gridPosition.z,
+          building.footprint?.width ?? 1,
+          building.footprint?.depth ?? 1
+        );
+
+        nearestBuilding = Math.min(
+          nearestBuilding,
+          distance
+        );
+      }
+
+      const centerDistance = Math.hypot(
+        x + width / 2 - GRID_SIZE / 2,
+        z + depth / 2 - GRID_SIZE / 2
+      );
+
+      const hash = Math.sin(
+        x * 127.1 +
+        z * 311.7 +
+        buildings.length * 74.7
+      ) * 43758.5453;
+
+      const variation = hash - Math.floor(hash);
+
+      const score = structures.length
+        ? -Math.abs(nearestBuilding - 0.15) * 3
+          + variation * 2
+          + Math.min(nearestBuilding, 5) * 0.35
+        : -centerDistance + variation * 2;
+
+      candidates.push({ x, z, score });
     }
   }
-  const candidates: { x: number; z: number; distance: number }[] = [];
-  const centerX = (GRID_SIZE - width) / 2, centerZ = (GRID_SIZE - depth) / 2;
-  for (let z = 0; z <= GRID_SIZE - depth; z++) for (let x = 0; x <= GRID_SIZE - width; x++) {
-    candidates.push({ x, z, distance: (x - centerX) ** 2 + (z - centerZ) ** 2 });
-  }
-  candidates.sort((a, b) => a.distance - b.distance || a.z - b.z || a.x - b.x);
-  for (const { x, z } of candidates) {
-    let free = true;
-    for (let dz = 0; dz < depth && free; dz++) {
-      for (let dx = 0; dx < width; dx++) if (occupied[(z + dz) * GRID_SIZE + x + dx]) { free = false; break; }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  for (const candidate of candidates) {
+    if (
+      !isValid ||
+      isValid(candidate.x, candidate.z, width, depth)
+    ) {
+      return { x: candidate.x, z: candidate.z };
     }
-    if (free) return { x, z };
   }
+
   return null;
 }
 
-export function findFreePlantSite(occupied: readonly Plot[], random: () => number = Math.random) {
-  for (let attempt = 0; attempt < 80; attempt++) {
-    const x = random() * GRID_SIZE, z = random() * GRID_SIZE;
-    const blocked = occupied.some(item => {
-      const width = item.footprint?.width ?? 0.5;
-      const depth = item.footprint?.depth ?? 0.5;
-      const dx = Math.max(item.gridPosition.x - x, 0, x - (item.gridPosition.x + width));
-      const dz = Math.max(item.gridPosition.z - z, 0, z - (item.gridPosition.z + depth));
-      return Math.hypot(dx, dz) < (item.footprint ? 0.55 : 0.85);
-    });
-    if (!blocked) return { x, z };
+
+
+
+export function findFreePlantSite(
+  occupied: readonly Plot[],
+  random: () => number = Math.random,
+  isValid?: (x: number, z: number) => boolean,
+  species: "tree" | "shrub" | "fern" | "flower" | "grass" = "tree"
+) {
+  let best: { x: number; z: number } | null = null;
+  let bestScore = -Infinity;
+
+  const isTree = species === "tree";
+
+  const check = (x: number, z: number) => {
+    if (
+      x < 0 ||
+      z < 0 ||
+      x >= GRID_SIZE - 0.5 ||
+      z >= GRID_SIZE - 0.5
+    ) return;
+
+    let nearestTree = Infinity;
+    let nearestPlant = Infinity;
+    let nearestBuilding = Infinity;
+
+    for (const item of occupied) {
+      const distance = plotDistance(
+        x, z, 0.5, 0.5,
+        item.gridPosition.x,
+        item.gridPosition.z,
+        item.footprint?.width ?? 0.5,
+        item.footprint?.depth ?? 0.5
+      );
+
+      if (item.footprint) {
+        const overlaps = edenFootprintsOverlap(
+          x, z, 0.5, 0.5,
+          item.gridPosition.x,
+          item.gridPosition.z,
+          item.footprint.width,
+          item.footprint.depth,
+          isTree ? 1.0 : 0.08
+        );
+        if (overlaps) return;
+
+        nearestBuilding = Math.min(
+          nearestBuilding,
+          distance
+        );
+      } else if (item.species === "tree") {
+        const clearance = isTree ? 0.8 : 0.16;
+
+        if (distance < clearance) return;
+
+        nearestTree = Math.min(
+          nearestTree,
+          distance
+        );
+      } else {
+        const clearance = isTree ? 0.3 : 0.08;
+
+        if (distance < clearance) return;
+
+        nearestPlant = Math.min(
+          nearestPlant,
+          distance
+        );
+      }
+    }
+
+    if (isValid && !isValid(x, z)) return;
+
+    const coverage = isTree
+      ? Math.min(nearestTree, 4)
+      : Math.min(nearestPlant, 2);
+
+    const nearBuildings = Number.isFinite(nearestBuilding)
+      ? Math.max(
+          0,
+          2.5 - Math.abs(nearestBuilding - 1.2)
+        )
+      : 0;
+
+    const score =
+      coverage * (isTree ? 3 : 1.5) +
+      nearBuildings * 0.35 +
+      random() * 1.5;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = { x, z };
+    }
+  };
+
+  const divisions = 18;
+  const step = GRID_SIZE / divisions;
+
+  const offsetX = random() * step;
+  const offsetZ = random() * step;
+
+  for (let gz = 0; gz < divisions; gz++) {
+    for (let gx = 0; gx < divisions; gx++) {
+      const x = (
+        gx * step +
+        offsetX +
+        (random() - 0.5) * step * 0.5
+      ) % GRID_SIZE;
+
+      const z = (
+        gz * step +
+        offsetZ +
+        (random() - 0.5) * step * 0.5
+      ) % GRID_SIZE;
+
+      check(
+        (x + GRID_SIZE) % GRID_SIZE,
+        (z + GRID_SIZE) % GRID_SIZE
+      );
+    }
   }
-  return null;
+
+  for (let i = 0; i < 72; i++) {
+    check(
+      random() * (GRID_SIZE - 0.5),
+      random() * (GRID_SIZE - 0.5)
+    );
+  }
+
+  return best;
 }
+
+

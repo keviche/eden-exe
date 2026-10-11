@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createWaterPlacement } from "../simulation/waterPlacement";
 import type { ActivityCategory, Building, EntityId, Plant, Resident, Weather, WorldState } from "../simulation/types";
 import { DEFAULT_WORLD_STATE, getCityDayKey, selectWeatherCondition } from "../simulation/worldDefaults";
 import { BUILDING_CATALOG, findFreePlot, findFreePlantSite, GRID_SIZE, MAX_BUILDING_FLOORS } from "../edenModels";
@@ -9,8 +10,8 @@ export const MAX_NATURE_GROWTH = 3;
 export const NATURE_GROWTH_PER_POINT = 0.12;
 export const MOSS_GROWTH_PER_POINT = 0.035;
 
-export const MAX_BUILDINGS = 80;
-export const MAX_PLANTS = 180;
+export const MAX_BUILDINGS = 120;
+export const MAX_PLANTS = 360;
 export const MAX_RESIDENTS = 40;
 const ACTIVITY_KEY = { productivity: "productivityPoints", leisure: "leisurePoints", idle: "idlePoints" } as const;
 
@@ -42,6 +43,7 @@ interface WorldStore {
 const freshWorld = (at = Date.now()): WorldState => ({
   ...structuredClone(DEFAULT_WORLD_STATE),
   cityDayKey: getCityDayKey(new Date(at)),
+  waterSeed: Math.floor(Math.random() * 4294967295) + 1,
 });
 
 const getNonIdleCategory = (
@@ -57,33 +59,213 @@ const createId = (type: string) =>
 
 function createBuilding(world: WorldState, at: number): Building | null {
   if (world.buildings.length >= MAX_BUILDINGS) return null;
+
   const residents = residentOccupiedPlots(world.residents);
-  // Let the growing city feel cottage-scale and garden-led while keeping every
-  // existing building type available to the simulation.
+  const waterPlacement = createWaterPlacement(world.waterSeed ?? 1);
+
   const catalog: (typeof BUILDING_CATALOG)[number][] = [];
+
   for (const entry of BUILDING_CATALOG) {
-    const copies = entry.id === "solar-house" ? 4 : entry.id === "greenhouse" ? 2 : 1;
-    for (let copy = 0; copy < copies; copy++) catalog.push(entry);
+    const copies = entry.id === "solar-house" ? 3 : 2;
+
+    for (let copy = 0; copy < copies; copy++) {
+      catalog.push(entry);
+    }
   }
-  for (let attempt = 0; attempt < catalog.length; attempt++) {
-    const config = catalog[Math.floor(Math.random() * catalog.length)]!;
-    const plot = findFreePlot([...world.buildings, ...residents], world.plants, config.width, config.depth);
+
+  // Shuffle the weighted catalog. Every building type gets
+  // a chance, including smaller buildings that fit gaps.
+  for (let i = catalog.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = catalog[i];
+    catalog[i] = catalog[j];
+    catalog[j] = temp;
+  }
+
+  const attempted = new Set<string>();
+
+  for (const config of catalog) {
+    if (attempted.has(config.id)) continue;
+    attempted.add(config.id);
+    const plot = findFreePlot(
+      [...world.buildings, ...residents],
+      world.plants,
+      config.width,
+      config.depth,
+      waterPlacement.isBuildingPlotValid
+    );
+
     if (!plot) continue;
-    return { type: "building", id: createId("building"), name: config.name, variantId: config.id, gridPosition: plot, footprint: { width: config.width, depth: config.depth }, rotation: 0, floors: Math.min(config.floors, MAX_BUILDING_FLOORS), moss: 0, createdAt: at };
+
+    return {
+      type: "building",
+      id: createId("building"),
+      name: config.name,
+      variantId: config.id,
+      gridPosition: plot,
+      footprint: {
+        width: config.width,
+        depth: config.depth
+      },
+      rotation: 0,
+      floors: Math.min(config.floors, MAX_BUILDING_FLOORS),
+      moss: 0,
+      createdAt: at
+    };
   }
+
   return null;
 }
+
 
 function createPlant(world: WorldState, at: number): Plant | null {
   if (world.plants.length >= MAX_PLANTS) return null;
   // Randomized candidates keep free navigation corridors around structures.
   const residents = residentOccupiedPlots(world.residents);
-  const position = findFreePlantSite([...world.buildings, ...world.plants, ...residents]);
+  const waterPlacement = createWaterPlacement(world.waterSeed ?? 1);
+  const species = (
+    ["tree", "tree", "tree", "tree", "tree",
+     "shrub", "shrub", "fern", "flower", "grass"] as const
+  )[Math.floor(Math.random() * 10)]!;
+
+  const position = findFreePlantSite(
+    [...world.buildings, ...world.plants, ...residents],
+    Math.random,
+    waterPlacement.isPlantSiteValid
+  , species);
   if (!position) return null;
-  const species = (["tree", "shrub", "fern", "flower", "grass"] as const)[Math.floor(Math.random() * 5)]!;
+  
   return { type: "plant", id: createId("plant"), species, variantId: species, gridPosition: position, growth: 0.2 + Math.random() * 0.35, createdAt: at };
 }
 
+
+
+
+function movePlantsOffWater(input: WorldState): WorldState {
+  const waterPlacement = createWaterPlacement(input.waterSeed ?? 1);
+  const plants = [...input.plants];
+  let changed = false;
+
+  for (let index = 0; index < plants.length; index++) {
+    const plant = plants[index];
+
+    if (
+      waterPlacement.isPlantSiteValid(
+        plant.gridPosition.x,
+        plant.gridPosition.z
+      )
+    ) {
+      continue;
+    }
+
+    const occupied = [
+      ...input.buildings,
+      ...residentOccupiedPlots(input.residents),
+      ...plants.filter((_, i) => i !== index),
+    ];
+
+    const position = findFreePlantSite(
+      occupied,
+      Math.random,
+      waterPlacement.isPlantSiteValid
+    );
+
+    if (!position) continue;
+
+    plants[index] = {
+      ...plant,
+      gridPosition: position,
+    };
+
+    changed = true;
+  }
+
+  return changed ? { ...input, plants } : input;
+}
+
+function fillOpenLand(input: WorldState, at: number): WorldState {
+  if (input.buildings.length === 0 && input.plants.length === 0) {
+    return input;
+  }
+
+  let world = input;
+
+  const targetBuildings = Math.min(MAX_BUILDINGS, 65);
+
+  while (world.buildings.length < targetBuildings) {
+    const building = createBuilding(world, at);
+    if (!building) break;
+
+    world = {
+      ...world,
+      buildings: [...world.buildings, building],
+    };
+  }
+
+  const targetPlants = Math.min(
+    MAX_PLANTS,
+    Math.max(310, world.buildings.length * 10)
+  );
+
+  while (world.plants.length < targetPlants) {
+    const plant = createPlant(world, at);
+    if (!plant) break;
+
+    world = {
+      ...world,
+      plants: [...world.plants, plant],
+    };
+  }
+
+  
+  // Relocate saved trees whose mature canopies intersect
+  // nearby buildings, without changing building positions.
+  const repairedPlants = [...world.plants];
+  const structures = [...world.buildings, ...world.residents];
+
+  for (let i = 0; i < repairedPlants.length; i++) {
+    const plant = repairedPlants[i];
+    if (plant.species !== "tree") continue;
+
+    const tooClose = structures.some(item => {
+      const bx = item.gridPosition.x;
+      const bz = item.gridPosition.z;
+      const bw = item.footprint?.width ?? 0.5;
+      const bd = item.footprint?.depth ?? 0.5;
+      const px = plant.gridPosition.x + 0.25;
+      const pz = plant.gridPosition.z + 0.25;
+
+      const dx = Math.max(bx - px, 0, px - (bx + bw));
+      const dz = Math.max(bz - pz, 0, pz - (bz + bd));
+
+      return Math.hypot(dx, dz) < 1.0;
+    });
+
+    if (!tooClose) continue;
+
+    const others = repairedPlants.filter(
+      (_, index) => index !== i
+    );
+
+    const position = findFreePlantSite(
+      [...structures, ...others],
+      Math.random,
+      waterPlacement.isPlantSiteValid,
+      "tree"
+    );
+
+    if (position) {
+      repairedPlants[i] = {
+        ...plant,
+        gridPosition: position
+      };
+    }
+  }
+
+  world = { ...world, plants: repairedPlants };
+
+  return world;
+}
 
 const EDEN_GROWTH_MAX = 3;
 
@@ -119,7 +301,7 @@ function growEden(world: WorldState, points: number): WorldState {
         ...plant,
         growth: Math.min(
           Math.min(EDEN_GROWTH_MAX, maxGrowth),
-          plant.growth + points * 0.075 * speed
+          plant.growth + points * 0.02625 * speed
         ),
       };
     }),
@@ -136,13 +318,64 @@ function applyMilestones(worldInput: WorldState, at: number): WorldState {
     while (consumed < earned) {
       let changed = false;
       if (category === "productivity") {
-        const eligible = world.buildings.find(building => (building.floors ?? 1) < MAX_BUILDING_FLOORS);
-        if (eligible) {
-          world = { ...world, buildings: world.buildings.map(building => building.id === eligible.id ? { ...building, floors: Math.min(MAX_BUILDING_FLOORS, (building.floors ?? 1) + 1), growth: 1 } : building) };
-          changed = true;
-        } else {
+        const eligible = world.buildings
+          .filter(building =>
+            (building.floors ?? 1) < MAX_BUILDING_FLOORS
+          )
+          .sort((a, b) =>
+            (a.floors ?? 1) - (b.floors ?? 1)
+          );
+
+        // Seven of every ten productivity milestones prioritize
+        // construction; the remaining three prioritize height.
+        const shouldBuild =
+          world.buildings.length < MAX_BUILDINGS &&
+          consumed % 10 < 7;
+
+        if (shouldBuild) {
           const building = createBuilding(world, at);
-          if (building) { world = { ...world, buildings: [...world.buildings, building] }; changed = true; }
+
+          if (building) {
+            world = {
+              ...world,
+              buildings: [...world.buildings, building],
+            };
+            changed = true;
+          }
+        }
+
+        if (!changed && eligible.length > 0) {
+          const building = eligible[0];
+
+          world = {
+            ...world,
+            buildings: world.buildings.map(item =>
+              item.id === building.id
+                ? {
+                    ...item,
+                    floors: Math.min(
+                      MAX_BUILDING_FLOORS,
+                      (item.floors ?? 1) + 1
+                    ),
+                    growth: 1,
+                  }
+                : item
+            ),
+          };
+
+          changed = true;
+        }
+
+        if (!changed) {
+          const building = createBuilding(world, at);
+
+          if (building) {
+            world = {
+              ...world,
+              buildings: [...world.buildings, building],
+            };
+            changed = true;
+          }
         }
       } else if (category === "leisure") {
         const buildingCount = world.buildings.length;
@@ -151,15 +384,15 @@ function applyMilestones(worldInput: WorldState, at: number): WorldState {
         ).length;
 
         // Roughly 1 tree per building, with some variation.
-        const maxTrees = Math.max(
-          1,
-          Math.ceil(buildingCount * 1.2)
+        const maxTrees = Math.min(
+          MAX_PLANTS,
+          Math.max(4, Math.ceil(buildingCount * 0.65))
         );
 
         // Limit total nature so buildings remain visually prominent.
-        const maxNature = Math.max(
-          2,
-          Math.ceil(buildingCount * 1.8)
+        const maxNature = Math.min(
+          MAX_PLANTS,
+          Math.max(8, Math.ceil(buildingCount * 1.5))
         );
 
         if (world.plants.length < maxNature) {
@@ -300,7 +533,10 @@ export const useWorldStore = create<WorldStore>((set) => ({
 
   loadWorld: (savedWorld) =>
     set((state) => {
-      const world = structuredClone(savedWorld);
+      const world = fillOpenLand(
+        movePlantsOffWater(structuredClone(savedWorld)),
+        Date.now()
+      );
       const lastNonIdleCategory = getNonIdleCategory(
         world.activity.category,
         state.lastNonIdleCategory
