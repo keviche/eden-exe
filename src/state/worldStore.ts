@@ -691,6 +691,9 @@ export const useWorldStore = create<WorldStore>((set) => ({
     if (!Number.isFinite(points) || points <= 0) return;
 
     set(state => {
+      // Activity points belong to the currently active state only.
+      if (state.world.activity.category !== category) return state;
+
       let world = applyMilestones({
         ...state.world,
         activity: {
@@ -754,7 +757,7 @@ export const useWorldStore = create<WorldStore>((set) => ({
       // Otherwise, use the selected productivity/leisure/idle category.
       const category: ActivityCategory = state.systemIdle ? "idle" : world.activity.category;
 
-      world = { ...world, simulationTime: world.simulationTime + simulationSeconds, activity: { ...world.activity, category, [ACTIVITY_KEY[category]]: world.activity[ACTIVITY_KEY[category]] + simulationSeconds / 60, ...(speed > 1 ? { productivityPoints: world.activity.productivityPoints + simulationSeconds / 60, leisurePoints: world.activity.leisurePoints + simulationSeconds / 60, idlePoints: world.activity.idlePoints + simulationSeconds / 60 } : {}) } };
+      world = { ...world, simulationTime: world.simulationTime + simulationSeconds, activity: { ...world.activity, category, [ACTIVITY_KEY[category]]: world.activity[ACTIVITY_KEY[category]] + simulationSeconds / 60 } };
       if (world.residents.length) {
         const isNight = world.simulationTime % 600 >= 360;
         world = { ...world, residents: world.residents.map(resident => {

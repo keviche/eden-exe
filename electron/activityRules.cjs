@@ -182,6 +182,15 @@ function classifyWindow(context = {}, overrides = {}) {
   const audioOnly = !browser && AUDIO_APPS.has(app);
 
   if (browser) {
+    // Browser-owned start pages have no meaningful site hostname. Treat the
+    // explicit New Tab page as idle, while leaving other unknown URLs intact.
+    const browserPage = normalize(context.url);
+    const browserTitle = normalize(context.windowTitle);
+    if (/^(?:chrome|brave|edge|vivaldi|opera):\/\/(?:newtab|new-tab-page|startpage)(?:[/?#].*)?$/.test(browserPage) ||
+        browserPage === "about:newtab" || browserPage === "about:blank" ||
+        /^(?:new tab|new tab page|new tab - .*|start page)(?:\s[-|].*)?$/.test(browserTitle)) {
+      return { category: "idle", reason: "browser_new_tab", browser, hostname: "", videoApp: false, audioOnly: false };
+    }
     if (hostname) {
       const custom = overrideMatch(overrides, "domains", hostname);
       if (custom) return { category: custom, reason: "custom_domain", browser, hostname, videoApp: false, audioOnly: AUDIO_DOMAINS.some(d => matchDomain(hostname, d)) };

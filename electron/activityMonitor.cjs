@@ -5,7 +5,10 @@ const { promisify } = require("node:util");
 const execFileAsync = promisify(execFile);
 
 const IDLE_THRESHOLD_SECONDS = 10;
-const CHECK_INTERVAL_MS = 2000;
+// active-win exposes snapshots rather than foreground-change events. Keep a
+// modest watchdog for app/tab switches, and use OS lifecycle events below for
+// immediate checks. We deliberately do not listen to mouse movement.
+const CHECK_INTERVAL_MS = 5000;
 const CHROME_URL_TIMEOUT_MS = 1500;
 
 // Unknown websites are tracked internally as "unknown".
@@ -558,6 +561,9 @@ function createActivityMonitor(onStatusChange) {
   let lastState = null;
   let polling = false;
   let running = false;
+  const onSystemTransition = () => {
+    if (running) void checkActivity();
+  };
 
   async function checkActivity() {
     if (!running || polling) return;
@@ -659,6 +665,12 @@ function createActivityMonitor(onStatusChange) {
       if (running) return;
 
       running = true;
+      // These Electron power events are useful for lock, wake and session
+      // transitions. App/window focus changes still use the watchdog because
+      // Electron has no cross-platform foreground-window subscription.
+      for (const eventName of ["lock-screen", "unlock-screen", "suspend", "resume", "user-did-become-active"]) {
+        powerMonitor.on(eventName, onSystemTransition);
+      }
       void checkActivity();
 
       intervalId = setInterval(() => {
@@ -672,6 +684,9 @@ function createActivityMonitor(onStatusChange) {
       if (intervalId !== null) {
         clearInterval(intervalId);
         intervalId = null;
+      }
+      for (const eventName of ["lock-screen", "unlock-screen", "suspend", "resume", "user-did-become-active"]) {
+        powerMonitor.removeListener(eventName, onSystemTransition);
       }
     },
 
