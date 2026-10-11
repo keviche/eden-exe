@@ -1,0 +1,42 @@
+{
+  "name": "eden-exe",
+  "private": true,
+  "version": "0.0.0",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:desktop": "concurrently -k \"npm run dev -- --host 127.0.0.1 --port 5173 --strictPort\" \"npm run electron:dev\"",
+    "electron:dev": "wait-on tcp:127.0.0.1:5173 && electron .",
+    "lint": "oxlint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
+    "active-win": "^8.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "three": "^0.186.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.81.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.3",
+    "wait-on": "^9.5.1"
+  }
+}

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { min-width: 280px; margin: 0; padding: 18px; font: 13px system-ui, sans-serif; background: #e7fbf4; color: #1a504a; }
+    h1 { font-size: 17px; margin: 0 0 12px; }
+    label { display: block; margin-top: 10px; font-weight: 600; }
+    input, select, button { box-sizing: border-box; display: block; width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #7bb4a4; border-radius: 7px; }
+    button { background: #2b8476; color: white; cursor: pointer; margin-top: 12px; }
+    p { font-size: 11px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>Eden.exe · video presence</h1>
+  <label for="browser">Browser</label>
+  <select id="browser"><option value="chrome">Chrome</option><option value="brave">Brave</option><option value="edge">Edge</option></select>
+  <label for="token">Pairing key from Eden's Build menu</label>
+  <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste pairing key">
+  <button id="save">Save pairing</button>
+  <p id="status" role="status">Only playing-video presence, site hostname, and active-tab title are sent to the local Eden app. No cloud service.</p>
+  <script src="popup.js"></script>
+</body>
+</html>
