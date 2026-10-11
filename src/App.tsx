@@ -26,6 +26,7 @@ import {
 import type { Batch, BuildingVariant, Part, Shape } from "./edenModels";
 import "./App.css";
 import FastForwardControls from "./FastForwardControls";
+import { ActivityStats, BuildingInsights } from "./EdenInsights";
 
 // Unit geometries are shared by every instance, including every plant leaf.
 // Their lifetime is the renderer module's lifetime; individual batches own only
@@ -483,7 +484,14 @@ const CONTROL_STYLE: CSSProperties = {
 };
 
 /** A single draw batch for one geometry/material combination. */
-const InstanceBatch = memo(function InstanceBatch({ batch, night }: { batch: Batch; night: boolean }) {
+const InstanceBatch = memo(function InstanceBatch({
+  batch, night, owners, onSelectBuilding,
+}: {
+  batch: Batch;
+  night: boolean;
+  owners?: string[];
+  onSelectBuilding?: (id: string) => void;
+}) {
   const meshRef = useRef<InstancedMesh>(null);
   const invalidate = useThree(state => state.invalidate);
   // Spare capacity limits GPU buffer recreation as new objects are added.
@@ -516,6 +524,15 @@ const InstanceBatch = memo(function InstanceBatch({ batch, night }: { batch: Bat
     <instancedMesh
       ref={meshRef}
       args={[GEOMETRIES[batch.shape], undefined, capacity]}
+      onClick={owners && onSelectBuilding ? event => {
+        if (event.button !== 0 || event.delta > 5) return;
+        const id = owners[event.instanceId ?? -1];
+        if (!id) return;
+        event.stopPropagation();
+        onSelectBuilding(id);
+      } : undefined}
+      onPointerOver={owners ? () => { document.body.style.cursor = 'pointer'; } : undefined}
+      onPointerOut={owners ? () => { document.body.style.cursor = ''; } : undefined}
       castShadow
       receiveShadow
     >
@@ -542,7 +559,7 @@ function BatchLayer({ batches, night }: { batches: Batch[]; night: boolean }) {
 }
 
 /** Store growth overrides age-based growth if the simulation supplies it. */
-function BuildingsLayer({ night }: { night: boolean }) {
+function BuildingsLayer({ night, onSelectBuilding }: { night: boolean; onSelectBuilding: (id: string) => void }) {
   const buildings = useWorldStore(selectBuildings);
   const [now, setNow] = useState(() => Date.now());
 
@@ -557,9 +574,11 @@ function BuildingsLayer({ night }: { night: boolean }) {
     return () => window.clearInterval(timer);
   }, [buildings]);
 
-  const batches = useMemo(() => {
+  const { batches, ownerByBatch } = useMemo(() => {
     const parts: Part[] = [];
+    const ownerByPart: string[] = [];
     for (const item of buildings) {
+      const firstPart = parts.length;
       const at = cellPoint(
         item.gridPosition.x + (item.footprint.width - 1) / 2,
         item.gridPosition.z + (item.footprint.depth - 1) / 2,
@@ -658,11 +677,26 @@ function BuildingsLayer({ night }: { night: boolean }) {
         }
       }
 
+      // Parts appended by this building (including moss/vines) share its ID.
+      for (let i = firstPart; i < parts.length; i++) ownerByPart.push(item.id);
     }
-    return batchParts(parts);
+    const ownerByBatch = new Map<string, string[]>();
+    parts.forEach((part, index) => {
+      const key = `${part.shape}:${part.finish}`;
+      let list = ownerByBatch.get(key);
+      if (!list) { list = []; ownerByBatch.set(key, list); }
+      list.push(ownerByPart[index]!);
+    });
+    return { batches: batchParts(parts), ownerByBatch };
   }, [buildings, now]);
 
-  return <BatchLayer batches={batches} night={night} />;
+  return <>{batches.map(batch => <InstanceBatch
+    key={batch.key}
+    batch={batch}
+    night={night}
+    owners={ownerByBatch.get(batch.key)}
+    onSelectBuilding={onSelectBuilding}
+  />)}</>;
 }
 
 function PlantsLayer({ night }: { night: boolean }) {
@@ -717,7 +751,7 @@ function useNight() {
   return getDayPhase(simulationTime) === "night";
 }
 
-const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; shadows: boolean }) {
+const World = memo(function World({ showGrid, shadows, onSelectBuilding }: { showGrid: boolean; shadows: boolean; onSelectBuilding: (id: string) => void }) {
   const night = useNight();
   const weather = useWorldStore(state => state.world.weather);
   const waterSeed = useWorldStore(state => state.world.waterSeed ?? 1);
@@ -768,7 +802,7 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
         const y = 0.5 + ((index * 13 + elapsed * 29) % 100) / 100 * BOARD_SIZE * 0.48;
         return <mesh key={index} position={[x, y, z]} rotation={[0.12, 0, 0.08]}><cylinderGeometry args={[0.012, 0.012, 0.32, 4]} /><meshBasicMaterial color="#c7f4f1" transparent opacity={0.65} /></mesh>;
       })}
-      <BuildingsLayer night={night} />
+      <BuildingsLayer night={night} onSelectBuilding={onSelectBuilding} />
       <PlantsLayer night={night} />
       <ResidentsLayer night={night} />
       </group>
@@ -834,7 +868,6 @@ useEffect(() => {
 
 
   // Primitive subscriptions keep the toolbar out of world movement/growth updates.
-  const activityCategory = useWorldStore(state => selectActivity(state).category);
   const buildingCount = useWorldStore(state => selectBuildings(state).length);
   const plantCount = useWorldStore(state => selectPlants(state).length);
   const worldActivity = useWorldStore(selectActivity);
@@ -847,6 +880,7 @@ useEffect(() => {
   const [showGrid, setShowGrid] = useState(false);
   const [shadows, setShadows] = useState(true);
   const [notice, setNotice] = useState("");
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
 
   useEffect(() => {
     let previous = Date.now();
@@ -930,7 +964,7 @@ useEffect(() => {
       >
         <TerrariumSky />
         <SkyBubbles />
-        <World showGrid={showGrid} shadows={shadows} />
+        <World showGrid={showGrid} shadows={shadows} onSelectBuilding={setSelectedBuildingId} />
       </Canvas>
       <div style={{
         ...PANEL_STYLE,
@@ -975,7 +1009,8 @@ useEffect(() => {
         </div>}
       </div>
       <div className="wordmark">EDEN<span>.EXE</span></div>
-      <div className="status"><i className={activityCategory} />{activityCategory}</div>
+      <BuildingInsights buildingId={selectedBuildingId} onClose={() => setSelectedBuildingId(null)} />
+      <ActivityStats />
     </main>
   );
 }
