@@ -47,6 +47,7 @@ export function selectWeatherCondition(random: () => number = Math.random): Weat
 }
 
 export const DEFAULT_WORLD_STATE: WorldState = {
+  waterSeed: 1,
   grid: DEFAULT_WORLD_GRID,
   buildings: [],
   plants: [],

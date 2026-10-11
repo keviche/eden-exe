@@ -1,3 +1,5 @@
+import WaterSurface from "./WaterSurface";
+import TerrainHills from "./TerrainHills";
 import TerrariumSky from "./TerrariumSky";
 import SkyBubbles from "./SkyBubbles";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -142,31 +144,180 @@ function TankEnclosure({ night }: { night: boolean }) {
   </group>;
 }
 
-function WaterCourse() {
-  const geometry = useMemo(() => {
-    const positions: number[] = [];
-    const halfWidth = 0.58;
-    const steps = 88;
-    for (let step = 0; step < steps; step++) {
-      const t0 = step / steps, t1 = (step + 1) / steps;
-      const z0 = -BOARD_SIZE * 0.48 + t0 * BOARD_SIZE * 0.71;
-      const z1 = -BOARD_SIZE * 0.48 + t1 * BOARD_SIZE * 0.71;
-      const x0 = -4 + 10 * t0 + Math.sin(t0 * Math.PI * 2) * 2;
-      const x1 = -4 + 10 * t1 + Math.sin(t1 * Math.PI * 2) * 2;
-      const a = [x0 - halfWidth, 0.065, z0], b = [x0 + halfWidth, 0.065, z0];
-      const c = [x1 + halfWidth, 0.065, z1], d = [x1 - halfWidth, 0.065, z1];
-      positions.push(...a, ...c, ...b, ...a, ...d, ...c);
+function waterRandom(seed: number) {
+  let state = seed >>> 0;
+
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function WaterCourse({ seed }: { seed: number }) {
+  const layout = useMemo(() => {
+    const random = waterRandom(seed);
+    const range = (min: number, max: number) =>
+      min + random() * (max - min);
+
+    const edge = BOARD_SIZE * 0.46;
+    const riverPositions: number[] = [];
+
+    // Randomized winding river.
+    const startX = range(-BOARD_SIZE * 0.17, BOARD_SIZE * 0.17);
+    const endX = range(-BOARD_SIZE * 0.17, BOARD_SIZE * 0.17);
+    const bend1 = range(-BOARD_SIZE * 0.13, BOARD_SIZE * 0.13);
+    const bend2 = range(-BOARD_SIZE * 0.07, BOARD_SIZE * 0.07);
+    const phase = range(0, Math.PI * 2);
+    const width = range(0.42, 0.78);
+
+    const riverPoint = (t: number) => {
+      const z = -edge + t * edge * 2;
+
+      const rawX =
+        startX * (1 - t) +
+        endX * t +
+        Math.sin(t * Math.PI * 2 + phase) * bend1 +
+        Math.sin(t * Math.PI * 4 + phase * 0.6) * bend2;
+
+      const w = width *
+        (1 + 0.18 * Math.sin(t * Math.PI * 5 + phase));
+
+      const x = Math.max(
+        -edge + w,
+        Math.min(edge - w, rawX)
+      );
+
+      return { x, z, w };
+    };
+
+    const steps = 100;
+
+    for (let i = 0; i < steps; i++) {
+      const a = riverPoint(i / steps);
+      const b = riverPoint((i + 1) / steps);
+
+      riverPositions.push(
+        a.x - a.w, 0.065, a.z,
+        b.x - b.w, 0.065, b.z,
+        a.x + a.w, 0.065, a.z,
+
+        a.x + a.w, 0.065, a.z,
+        b.x - b.w, 0.065, b.z,
+        b.x + b.w, 0.065, b.z
+      );
     }
-    const result = new BufferGeometry();
-    result.setAttribute("position", new Float32BufferAttribute(positions, 3));
-    result.computeVertexNormals();
-    return result;
-  }, []);
-  return <group>
-    <mesh geometry={geometry} receiveShadow><meshPhysicalMaterial color="#21cce2" roughness={0.11} metalness={0.06} clearcoat={1} clearcoatRoughness={0.08} emissive="#19a9bd" emissiveIntensity={0.1} /></mesh>
-    <mesh position={[6, 0.073, BOARD_SIZE * 0.29]} scale={[3.3, 0.075, 1.85]} receiveShadow><sphereGeometry args={[1, 32, 16]} /><meshPhysicalMaterial color="#35d8e8" roughness={0.08} metalness={0.08} clearcoat={1} emissive="#10a8bd" emissiveIntensity={0.12} /></mesh>
-    {[0, 1, 2].map(index => <mesh key={index} position={[6, 0.153 + index * 0.002, BOARD_SIZE * 0.29]} scale={[2.25 + index * 0.35, 1.12 + index * 0.22, 1]} rotation={[-Math.PI / 2, 0, index * 0.35]}><ringGeometry args={[0.91, 1, 64]} /><meshBasicMaterial color={index === 1 ? "#d6ffff" : "#76f4ff"} transparent opacity={0.48} side={2} /></mesh>)}
-  </group>;
+
+    const river = new BufferGeometry();
+    river.setAttribute(
+      "position",
+      new Float32BufferAttribute(riverPositions, 3)
+    );
+    river.computeVertexNormals();
+
+    // Organic shoreline geometry for lakes and ponds.
+    const makeWaterBody = (
+      x: number,
+      z: number,
+      radiusX: number,
+      radiusZ: number
+    ) => {
+      const positions: number[] = [];
+      const segments = 72;
+      const phase1 = range(0, Math.PI * 2);
+      const phase2 = range(0, Math.PI * 2);
+      const wobble = range(0.06, 0.13);
+
+      const point = (angle: number) => {
+        const variation =
+          1 +
+          wobble * Math.sin(angle * 3 + phase1) +
+          wobble * 0.45 * Math.cos(angle * 5 + phase2);
+
+        return [
+          x + Math.cos(angle) * radiusX * variation,
+          0.078,
+          z + Math.sin(angle) * radiusZ * variation
+        ];
+      };
+
+      for (let i = 0; i < segments; i++) {
+        const a = i / segments * Math.PI * 2;
+        const b = (i + 1) / segments * Math.PI * 2;
+
+        positions.push(
+          x, 0.078, z,
+          ...point(b),
+          ...point(a)
+        );
+      }
+
+      const geometry = new BufferGeometry();
+      geometry.setAttribute(
+        "position",
+        new Float32BufferAttribute(positions, 3)
+      );
+      geometry.computeVertexNormals();
+
+      return geometry;
+    };
+
+    // Put the lake and pond on opposite sides of the river.
+    const lakeSide = random() < 0.5 ? -1 : 1;
+
+    const lakeRadiusX = range(1.8, 3.1);
+    const lakeRadiusZ = range(1.4, 2.5);
+
+    const lakeX = lakeSide *
+      range(BOARD_SIZE * 0.20, BOARD_SIZE * 0.29);
+    const lakeZ = range(
+      -BOARD_SIZE * 0.25,
+      BOARD_SIZE * 0.25
+    );
+
+    const pondRadiusX = range(0.9, 1.65);
+    const pondRadiusZ = range(0.75, 1.35);
+
+    const pondX = -lakeSide *
+      range(BOARD_SIZE * 0.20, BOARD_SIZE * 0.30);
+    const pondZ = range(
+      -BOARD_SIZE * 0.30,
+      BOARD_SIZE * 0.30
+    );
+
+    const lake = makeWaterBody(
+      lakeX, lakeZ, lakeRadiusX, lakeRadiusZ
+    );
+
+    const pond = makeWaterBody(
+      pondX, pondZ, pondRadiusX, pondRadiusZ
+    );
+
+    return { river, lake, pond };
+  }, [seed]);
+
+  useEffect(() => {
+    return () => {
+      layout.river.dispose();
+      layout.lake.dispose();
+      layout.pond.dispose();
+    };
+  }, [layout]);
+
+  return (
+    <group>
+      <mesh geometry={layout.river} receiveShadow>
+        <WaterSurface kind="river" />
+      </mesh>
+
+      <mesh geometry={layout.lake} receiveShadow>
+        <WaterSurface kind="lake" />
+      </mesh>
+
+      <mesh geometry={layout.pond} receiveShadow>
+        <WaterSurface kind="pond" />
+      </mesh>
+    </group>
+  );
 }
 
 function MossBanks({ night }: { night: boolean }) {
@@ -454,6 +605,7 @@ function useNight() {
 const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; shadows: boolean }) {
   const night = useNight();
   const weather = useWorldStore(state => state.world.weather);
+  const waterSeed = useWorldStore(state => state.world.waterSeed ?? 1);
   const simulationTime = useWorldStore(state => state.world.simulationTime);
   const phase = getDayPhase(simulationTime);
   const sky = weather.condition === "rainy" ? (night ? "#263c4a" : "#d7e5dc") : weather.condition === "cloudy" ? (night ? "#263f4a" : "#d3e9e7") : phase === "sunset" ? "#ffd6a2" : (night ? "#102b36" : "#bceaf1");
@@ -484,10 +636,11 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
         <meshStandardMaterial color={night ? "#4a3429" : "#573722"} roughness={0.96} />
       </mesh>
       <mesh position={[0, 0.004, 0]} receiveShadow geometry={GROUND_GEOMETRY}>
-        <meshStandardMaterial color={night ? "#299a6c" : "#3ca959"} roughness={0.76} />
+        <meshStandardMaterial color={night ? "#168451" : "#25c653"} roughness={0.76} />
       </mesh>
       <MossBanks night={night} />
-      <WaterCourse />
+      <TerrainHills seed={waterSeed} night={night} />
+      <WaterCourse seed={waterSeed} />
       {showGrid && <gridHelper args={[BOARD_SIZE, GRID_SIZE, night ? "#5e9c96" : "#b4e2cc", night ? "#376c6d" : "#8bc8ae"]} position={[0, 0.04, 0]} />}
       <TankEnclosure night={night} />
       {weather.condition === "cloudy" && Array.from({ length: 5 }, (_, index) => (
