@@ -374,11 +374,152 @@ function buildPlant(species: string, seed: number): Model {
       });
     }));
   } else if (species === "tree") {
-    b.stem([0, 0, 0], [0, 0.98, 0], 0.075, "#977652");
-    for (const side of [-1, 1]) b.stem([0, 0.53, 0], [side * 0.23, 0.89, 0.03], 0.028, "#977652");
-    [[0, 1.02, 0, 0.33], [-0.23, 0.89, 0.03, 0.27], [0.22, 0.92, 0.02, 0.28], [0, 0.95, -0.23, 0.26], [0.04, 1.23, -0.025, 0.25]].forEach(([x, y, z, radius], index) => {
-      b.foliage([x!, y!, z!], radius!, ["#31ae55", "#59cf56", "#87da65"][(seed + index) % 3]!);
-    });
+    // Twelve deterministic tree variations across five silhouettes.
+    const style = seed % 5;
+    const variant = Math.floor(seed / 5);
+    const heightScale = 0.88 + (seed % 4) * 0.085;
+    const widthScale = 0.85 + ((seed * 7) % 5) * 0.075;
+    const trunkColor = ["#8d6b4e", "#997756", "#806347", "#a07c58"][seed % 4]!;
+    const leaves = [
+      ["#36ad67", "#64cf77", "#95e19a"],
+      ["#2eae83", "#58d0a2", "#8fe3b5"],
+      ["#5eaf58", "#8ed46e", "#b6e891"],
+      ["#319f75", "#5ac3a0", "#9cdec5"],
+      ["#59b26c", "#86d493", "#b3e9a8"]
+    ][style]!;
+
+    // Tree-local scaling gives every seed distinct proportions.
+    b.group(
+      [0, 0, 0],
+      [0, seed * 0.73, 0],
+      [widthScale, heightScale, widthScale],
+      () => {
+        const foliage = (
+          x: number, y: number, z: number,
+          radius: number, index: number
+        ) => {
+          b.foliage(
+            [x, y, z],
+            radius,
+            leaves[(seed + index) % leaves.length]!
+          );
+        };
+
+        if (style === 0) {
+          // Rounded deciduous tree: dense, full canopy.
+          b.stem([0, 0, 0], [0, 0.91, 0], 0.072, trunkColor);
+
+          for (let i = 0; i < 5; i++) {
+            const angle = i * Math.PI * 2 / 5;
+            const x = Math.cos(angle) * 0.25;
+            const z = Math.sin(angle) * 0.25;
+            b.stem(
+              [0, 0.61, 0],
+              [x * 0.7, 0.98, z * 0.7],
+              0.026,
+              trunkColor
+            );
+            foliage(x, 1.02 + i % 2 * 0.07, z, 0.29, i);
+          }
+
+          foliage(0, 1.19, 0, 0.36, 6);
+          foliage(0.08, 0.93, -0.08, 0.3, 7);
+
+        } else if (style === 1) {
+          // Tall, narrow tree: vertical silhouette.
+          b.stem([0, 0, 0], [0, 1.48, 0], 0.052, trunkColor);
+
+          for (let layer = 0; layer < 5; layer++) {
+            const y = 0.62 + layer * 0.19;
+            const radius = 0.24 - layer * 0.023;
+
+            foliage(
+              Math.sin(layer * 2.3) * 0.055,
+              y,
+              Math.cos(layer * 2.3) * 0.055,
+              radius,
+              layer
+            );
+          }
+
+          foliage(0, 1.57, 0, 0.19, 6);
+
+        } else if (style === 2) {
+          // Spreading oak: thick trunk, wide irregular crown.
+          b.stem([0, 0, 0], [0, 0.83, 0], 0.09, trunkColor);
+
+          for (let i = 0; i < 6; i++) {
+            const angle = i * Math.PI * 2 / 6 + variant * 0.2;
+            const x = Math.cos(angle) * 0.43;
+            const z = Math.sin(angle) * 0.38;
+            const y = 0.94 + i % 3 * 0.08;
+
+            b.stem(
+              [0, 0.57 + i % 2 * 0.08, 0],
+              [x, y, z],
+              0.035,
+              trunkColor
+            );
+
+            foliage(x, y + 0.06, z, 0.28 + i % 2 * 0.035, i);
+          }
+
+          foliage(0, 1.13, 0, 0.34, 7);
+          foliage(-0.13, 0.94, 0.12, 0.3, 8);
+
+        } else if (style === 3) {
+          // Layered tree: distinct tiers of foliage.
+          b.stem([0, 0, 0], [0, 1.4, 0], 0.065, trunkColor);
+
+          for (let layer = 0; layer < 4; layer++) {
+            const y = 0.57 + layer * 0.26;
+            const spread = 0.35 - layer * 0.065;
+
+            for (let i = 0; i < 3; i++) {
+              const angle = i * Math.PI * 2 / 3 + layer * 0.7;
+              const x = Math.cos(angle) * spread;
+              const z = Math.sin(angle) * spread;
+
+              b.stem(
+                [0, y - 0.1, 0],
+                [x * 0.7, y, z * 0.7],
+                0.02,
+                trunkColor
+              );
+
+              foliage(x, y, z, 0.19 + (3 - layer) * 0.012, layer * 3 + i);
+            }
+          }
+
+          foliage(0, 1.47, 0, 0.2, 13);
+
+        } else {
+          // Asymmetric tree: offset crown and angled branches.
+          const lean = seed % 2 === 0 ? 0.16 : -0.16;
+
+          b.stem([0, 0, 0], [lean, 1.13, 0], 0.069, trunkColor);
+
+          for (let i = 0; i < 6; i++) {
+            const angle = i * 2.4 + seed * 0.15;
+            const spread = 0.18 + i % 3 * 0.095;
+            const x = lean + Math.cos(angle) * spread;
+            const z = Math.sin(angle) * spread;
+            const y = 0.87 + i % 4 * 0.12;
+
+            b.stem(
+              [lean * 0.65, 0.7, 0],
+              [x * 0.75, y, z * 0.75],
+              0.023,
+              trunkColor
+            );
+
+            foliage(x, y, z, 0.23 + i % 2 * 0.045, i);
+          }
+
+          foliage(lean, 1.24, 0, 0.3, 8);
+        }
+      }
+    );
   } else if (species === "grass" || species === "moss") {
     for (let blade = 0; blade < 7; blade++) {
       const length = 0.42 + blade % 3 * 0.1, tilt = 0.2 + blade % 3 * 0.16;
@@ -457,7 +598,37 @@ export function findFreePlot(buildings: readonly Plot[], plants: readonly Plot[]
   for (let z = 0; z <= GRID_SIZE - depth; z++) for (let x = 0; x <= GRID_SIZE - width; x++) {
     candidates.push({ x, z, distance: (x - centerX) ** 2 + (z - centerZ) ** 2 });
   }
-  candidates.sort((a, b) => a.distance - b.distance || a.z - b.z || a.x - b.x);
+  // Spread buildings across the map rather than clustering at the center.
+  // Prefer candidates far from existing occupied cells.
+  const occupiedCells: { x: number; z: number }[] = [];
+  for (let z = 0; z < GRID_SIZE; z++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      if (occupied[z * GRID_SIZE + x]) {
+        occupiedCells.push({ x: x + 0.5, z: z + 0.5 });
+      }
+    }
+  }
+
+  candidates.sort((a, b) => {
+    const spacingScore = (candidate: typeof a) => {
+      if (!occupiedCells.length) return candidate.distance;
+
+      const cx = candidate.x + width / 2;
+      const cz = candidate.z + depth / 2;
+
+      let nearest = Infinity;
+      for (const cell of occupiedCells) {
+        const distance =
+          (cx - cell.x) ** 2 + (cz - cell.z) ** 2;
+        nearest = Math.min(nearest, distance);
+      }
+      return nearest;
+    };
+
+    return spacingScore(b) - spacingScore(a)
+      || a.z - b.z
+      || a.x - b.x;
+  });
   for (const { x, z } of candidates) {
     let free = true;
     for (let dz = 0; dz < depth && free; dz++) {
@@ -468,17 +639,58 @@ export function findFreePlot(buildings: readonly Plot[], plants: readonly Plot[]
   return null;
 }
 
-export function findFreePlantSite(occupied: readonly Plot[], random: () => number = Math.random) {
-  for (let attempt = 0; attempt < 80; attempt++) {
-    const x = random() * GRID_SIZE, z = random() * GRID_SIZE;
-    const blocked = occupied.some(item => {
+export function findFreePlantSite(
+  occupied: readonly Plot[],
+  random: () => number = Math.random
+) {
+  let best: { x: number; z: number } | null = null;
+  let bestScore = -Infinity;
+
+  // Sample the entire board and choose an open location
+  // that is relatively far from other objects.
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const x = random() * GRID_SIZE;
+    const z = random() * GRID_SIZE;
+
+    let nearest = Infinity;
+    let blocked = false;
+
+    for (const item of occupied) {
       const width = item.footprint?.width ?? 0.5;
       const depth = item.footprint?.depth ?? 0.5;
-      const dx = Math.max(item.gridPosition.x - x, 0, x - (item.gridPosition.x + width));
-      const dz = Math.max(item.gridPosition.z - z, 0, z - (item.gridPosition.z + depth));
-      return Math.hypot(dx, dz) < (item.footprint ? 0.55 : 0.85);
-    });
-    if (!blocked) return { x, z };
+
+      const dx = Math.max(
+        item.gridPosition.x - x,
+        0,
+        x - (item.gridPosition.x + width)
+      );
+
+      const dz = Math.max(
+        item.gridPosition.z - z,
+        0,
+        z - (item.gridPosition.z + depth)
+      );
+
+      const distance = Math.hypot(dx, dz);
+
+      if (distance < (item.footprint ? 0.55 : 0.85)) {
+        blocked = true;
+        break;
+      }
+
+      nearest = Math.min(nearest, distance);
+    }
+
+    if (blocked) continue;
+
+    // Favor open space without forcing a strict pattern.
+    const score = nearest === Infinity ? random() : nearest;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = { x, z };
+    }
   }
-  return null;
+
+  return best;
 }

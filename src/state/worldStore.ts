@@ -55,29 +55,63 @@ const getNonIdleCategory = (
 const createId = (type: string) =>
   `${type}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 
+// Only the cell currently occupied by each resident should
+// affect construction. Future walking routes are not buildings.
+function currentResidentPlots(residents: WorldState["residents"]) {
+  return residents.map(resident => ({
+    gridPosition: residentGridPosition(resident.position),
+    footprint: { width: 1, depth: 1 },
+  }));
+}
+
 function createBuilding(world: WorldState, at: number): Building | null {
   if (world.buildings.length >= MAX_BUILDINGS) return null;
-  const residents = residentOccupiedPlots(world.residents);
-  // Let the growing city feel cottage-scale and garden-led while keeping every
-  // existing building type available to the simulation.
-  const catalog: (typeof BUILDING_CATALOG)[number][] = [];
-  for (const entry of BUILDING_CATALOG) {
-    const copies = entry.id === "solar-house" ? 4 : entry.id === "greenhouse" ? 2 : 1;
-    for (let copy = 0; copy < copies; copy++) catalog.push(entry);
-  }
+
+  const residents = currentResidentPlots(world.residents);
+
+  // Prefer small, garden-friendly buildings, but test every
+  // catalog entry before concluding that the city is full.
+  const catalog = BUILDING_CATALOG.flatMap(entry =>
+    Array.from(
+      { length: entry.id === "solar-house" ? 4 : entry.id === "greenhouse" ? 2 : 1 },
+      () => entry
+    )
+  );
+
+  const offset = Math.floor(Math.random() * catalog.length);
+
   for (let attempt = 0; attempt < catalog.length; attempt++) {
-    const config = catalog[Math.floor(Math.random() * catalog.length)]!;
-    const plot = findFreePlot([...world.buildings, ...residents], world.plants, config.width, config.depth);
+    const config = catalog[(offset + attempt) % catalog.length]!;
+    const plot = findFreePlot(
+      [...world.buildings, ...residents],
+      world.plants,
+      config.width,
+      config.depth
+    );
+
     if (!plot) continue;
-    return { type: "building", id: createId("building"), name: config.name, variantId: config.id, gridPosition: plot, footprint: { width: config.width, depth: config.depth }, rotation: 0, floors: Math.min(config.floors, MAX_BUILDING_FLOORS), moss: 0, createdAt: at };
+
+    return {
+      type: "building",
+      id: createId("building"),
+      name: config.name,
+      variantId: config.id,
+      gridPosition: plot,
+      footprint: { width: config.width, depth: config.depth },
+      rotation: 0,
+      floors: Math.min(config.floors, MAX_BUILDING_FLOORS),
+      moss: 0,
+      createdAt: at,
+    };
   }
+
   return null;
 }
 
 function createPlant(world: WorldState, at: number): Plant | null {
   if (world.plants.length >= MAX_PLANTS) return null;
   // Randomized candidates keep free navigation corridors around structures.
-  const residents = residentOccupiedPlots(world.residents);
+  const residents = currentResidentPlots(world.residents);
   const position = findFreePlantSite([...world.buildings, ...world.plants, ...residents]);
   if (!position) return null;
   const species = (["tree", "shrub", "fern", "flower", "grass"] as const)[Math.floor(Math.random() * 5)]!;
@@ -113,13 +147,13 @@ function growEden(world: WorldState, points: number): WorldState {
     plants: world.plants.map(plant => {
       const speed = 0.65 + edenRandom(plant.id, 13) * 0.7;
       const maxGrowth =
-        1.4 + edenRandom(plant.id, 29) * 1.6;
+        1.25 + edenRandom(plant.id, 29) * 1.25;
 
       return {
         ...plant,
         growth: Math.min(
           Math.min(EDEN_GROWTH_MAX, maxGrowth),
-          plant.growth + points * 0.075 * speed
+          plant.growth + points * 0.056 * speed
         ),
       };
     }),
@@ -136,14 +170,47 @@ function applyMilestones(worldInput: WorldState, at: number): WorldState {
     while (consumed < earned) {
       let changed = false;
       if (category === "productivity") {
-        const eligible = world.buildings.find(building => (building.floors ?? 1) < MAX_BUILDING_FLOORS);
-        if (eligible) {
-          world = { ...world, buildings: world.buildings.map(building => building.id === eligible.id ? { ...building, floors: Math.min(MAX_BUILDING_FLOORS, (building.floors ?? 1) + 1), growth: 1 } : building) };
-          changed = true;
-        } else {
+        // Alternate new construction and vertical upgrades.
+        // If the preferred action cannot run, try the other.
+        const preferNewBuilding = consumed % 2 === 0;
+
+        const addNewBuilding = () => {
           const building = createBuilding(world, at);
-          if (building) { world = { ...world, buildings: [...world.buildings, building] }; changed = true; }
-        }
+          if (!building) return false;
+          world = {
+            ...world,
+            buildings: [...world.buildings, building],
+          };
+          return true;
+        };
+
+        const upgradeBuilding = () => {
+          const eligible = world.buildings.find(
+            building => (building.floors ?? 1) < MAX_BUILDING_FLOORS
+          );
+          if (!eligible) return false;
+
+          world = {
+            ...world,
+            buildings: world.buildings.map(building =>
+              building.id === eligible.id
+                ? {
+                    ...building,
+                    floors: Math.min(
+                      MAX_BUILDING_FLOORS,
+                      (building.floors ?? 1) + 1
+                    ),
+                    growth: 1,
+                  }
+                : building
+            ),
+          };
+          return true;
+        };
+
+        changed = preferNewBuilding
+          ? (addNewBuilding() || upgradeBuilding())
+          : (upgradeBuilding() || addNewBuilding());
       } else if (category === "leisure") {
         const buildingCount = world.buildings.length;
         const treeCount = world.plants.filter(
