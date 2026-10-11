@@ -1,5 +1,15 @@
 import { useEffect, useMemo } from "react";
-import { BufferGeometry, Float32BufferAttribute } from "three";
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Color,
+  ConeGeometry,
+  DodecahedronGeometry,
+  SphereGeometry,
+  MeshStandardMaterial,
+  InstancedMesh,
+  Object3D
+} from "three";
 import { BOARD_SIZE } from "./edenModels";
 
 type Hill = {
@@ -77,6 +87,113 @@ function getWaterLayout(seed: number) {
     lake: { x: lakeX, z: lakeZ, rx: lakeRadiusX, rz: lakeRadiusZ },
     pond: { x: pondX, z: pondZ, rx: pondRadiusX, rz: pondRadiusZ }
   };
+}
+
+
+type DetailInstance = {
+  x: number;
+  y: number;
+  z: number;
+  scale: number;
+  rotation: number;
+  color: Color;
+};
+
+function TerrainDetailInstances({
+  instances,
+  kind,
+  night
+}: {
+  instances: DetailInstance[];
+  kind: "grass" | "moss" | "stone";
+  night: boolean;
+}) {
+  const resources = useMemo(() => {
+    const geometry =
+      kind === "grass"
+        ? new ConeGeometry(0.045, 0.24, 3)
+        : kind === "moss"
+          ? new SphereGeometry(0.13, 6, 4)
+          : new DodecahedronGeometry(0.12, 0);
+
+    const material = new MeshStandardMaterial({
+      color: night ? "#b5d5c3" : "#ffffff",
+      roughness: 0.98,
+      metalness: 0,
+      flatShading: kind !== "moss"
+    });
+
+    const mesh = new InstancedMesh(
+      geometry,
+      material,
+      Math.max(1, instances.length)
+    );
+
+    mesh.count = instances.length;
+    mesh.frustumCulled = false;
+    mesh.raycast = () => {};
+
+    const dummy = new Object3D();
+
+    instances.forEach((item, index) => {
+      dummy.position.set(item.x, item.y, item.z);
+
+      dummy.rotation.set(0, item.rotation, 0);
+
+      if (kind === "grass") {
+        // Cone is centered vertically. Its base rests on
+        // the terrain, with only a small amount embedded.
+        dummy.position.y += 0.105 * item.scale;
+
+        dummy.scale.set(
+          item.scale,
+          item.scale,
+          item.scale
+        );
+      } else if (kind === "moss") {
+        // Flatten the sphere to create a low moss cushion.
+        dummy.position.y += 0.012;
+
+        dummy.scale.set(
+          item.scale,
+          0.22 * item.scale,
+          item.scale
+        );
+      } else {
+        // Pebbles sit partially embedded in the soil.
+        dummy.position.y += 0.035 * item.scale;
+
+        dummy.scale.set(
+          item.scale,
+          0.55 * item.scale,
+          0.8 * item.scale
+        );
+      }
+
+      dummy.updateMatrix();
+
+      mesh.setMatrixAt(index, dummy.matrix);
+      mesh.setColorAt(index, item.color);
+    });
+
+    mesh.instanceMatrix.needsUpdate = true;
+
+    if (mesh.instanceColor) {
+      mesh.instanceColor.needsUpdate = true;
+    }
+
+    return { mesh, geometry, material };
+  }, [instances, kind, night]);
+
+  useEffect(() => {
+    return () => {
+      resources.mesh.dispose();
+      resources.geometry.dispose();
+      resources.material.dispose();
+    };
+  }, [resources]);
+
+  return <primitive object={resources.mesh} />;
 }
 
 export default function TerrainHills({
@@ -227,6 +344,95 @@ export default function TerrainHills({
     // visibly raised green patches.
     const divisions = 160;
     const positions: number[] = [];
+
+    // Deterministic procedural terrain coloration.
+    const colors: number[] = [];
+
+    const fract = (value: number) =>
+      value - Math.floor(value);
+
+    const hash = (x: number, z: number) =>
+      fract(
+        Math.sin(x * 127.1 + z * 311.7 + seed * 0.013) *
+        43758.5453
+      );
+
+    function noise(x: number, z: number) {
+      const ix = Math.floor(x);
+      const iz = Math.floor(z);
+      const fx = x - ix;
+      const fz = z - iz;
+
+      const ux = fx * fx * (3 - 2 * fx);
+      const uz = fz * fz * (3 - 2 * fz);
+
+      const a = hash(ix, iz);
+      const b = hash(ix + 1, iz);
+      const c = hash(ix, iz + 1);
+      const d = hash(ix + 1, iz + 1);
+
+      return (
+        a * (1 - ux) * (1 - uz) +
+        b * ux * (1 - uz) +
+        c * (1 - ux) * uz +
+        d * ux * uz
+      );
+    }
+
+    function terrainColor(x: number, z: number) {
+      const broad = noise(x * 0.35, z * 0.35);
+      const medium = noise(x * 1.7, z * 1.7);
+      const fine = noise(x * 7.0, z * 7.0);
+
+      const variation =
+        (broad - 0.5) * 0.22 +
+        (medium - 0.5) * 0.16 +
+        (fine - 0.5) * 0.09;
+
+      const waterDistance = distanceFromWater(x, z);
+
+      const wetness =
+        1 - smoothstep(0.15, 1.65, waterDistance);
+
+      const dx = heightAt(x + 0.12, z) -
+                 heightAt(x - 0.12, z);
+
+      const dz = heightAt(x, z + 0.12) -
+                 heightAt(x, z - 0.12);
+
+      const slope = Math.sqrt(dx * dx + dz * dz) / 0.24;
+
+      const exposedSoil =
+        smoothstep(0.25, 0.85, slope) * 0.55;
+
+      // Vibrant grass with subtle natural variation.
+      let r = 0.105 + variation * 0.55;
+      let g = 0.57 + variation;
+      let b = 0.19 + variation * 0.45;
+
+      // Blend brown soil into steeper areas.
+      r = r * (1 - exposedSoil) + 0.34 * exposedSoil;
+      g = g * (1 - exposedSoil) + 0.25 * exposedSoil;
+      b = b * (1 - exposedSoil) + 0.13 * exposedSoil;
+
+      // Darken terrain around water.
+      const damp = wetness * 0.30;
+
+      r *= 1 - damp;
+      g *= 1 - damp;
+      b *= 1 - damp * 0.5;
+
+      return [
+        Math.max(0, Math.min(1, r)),
+        Math.max(0, Math.min(1, g)),
+        Math.max(0, Math.min(1, b))
+      ];
+    }
+
+    function addColor(x: number, z: number) {
+      colors.push(...terrainColor(x, z));
+    }
+
     const size = BOARD_SIZE * 0.96;
 
     for (let iz = 0; iz < divisions; iz++) {
@@ -250,6 +456,15 @@ export default function TerrainHills({
           x0, y01, z1,
           x1, y11, z1
         );
+
+        addColor(x0, z0);
+        addColor(x0, z1);
+        addColor(x1, z0);
+
+        addColor(x1, z0);
+        addColor(x0, z1);
+        addColor(x1, z1);
+
       }
     }
 
@@ -258,28 +473,242 @@ export default function TerrainHills({
       "position",
       new Float32BufferAttribute(positions, 3)
     );
+
+    geometry.setAttribute(
+      "color",
+      new Float32BufferAttribute(colors, 3)
+    );
+
     // Recalculate normals after elevation displacement.
     geometry.computeVertexNormals();
 
-    return geometry;
+
+    // EDEN_TERRAIN_DETAILS_V1
+    // Procedural decorations follow the existing terrain height
+    // and avoid river/pond water boundaries.
+
+    const detailRandom = seededRandom(seed ^ 0x4e91c2);
+
+    const grassPositions: Array<{
+      x: number; y: number; z: number;
+      scale: number; rotation: number; color: Color;
+    }> = [];
+
+    const mossPositions: Array<{
+      x: number; y: number; z: number;
+      scale: number; rotation: number; color: Color;
+    }> = [];
+
+    const stonePositions: Array<{
+      x: number; y: number; z: number;
+      scale: number; rotation: number; color: Color;
+    }> = [];
+
+    const terrainHalf = BOARD_SIZE * 0.48;
+
+    const grassPalette = [
+      "#48c96a",
+      "#3db85a",
+      "#66d979",
+      "#299c55",
+      "#78d987"
+    ];
+
+    const mossPalette = [
+      "#248e53",
+      "#39aa61",
+      "#56b96c",
+      "#2d995c"
+    ];
+
+    const stonePalette = [
+      "#879e8d",
+      "#9aa99a",
+      "#788e82",
+      "#b0b6a3"
+    ];
+
+    function pickColor(palette: string[]) {
+      return new Color(
+        palette[Math.floor(detailRandom() * palette.length)]
+      );
+    }
+
+    function terrainSlope(x: number, z: number) {
+      const step = 0.12;
+
+      const dx =
+        heightAt(x + step, z) -
+        heightAt(x - step, z);
+
+      const dz =
+        heightAt(x, z + step) -
+        heightAt(x, z - step);
+
+      return Math.hypot(dx, dz) / (2 * step);
+    }
+
+    // Grass is deliberately excluded from the immediate
+    // shoreline. Density fades in gradually farther inland.
+    for (let i = 0; i < 2200; i++) {
+      const x = (detailRandom() * 2 - 1) * terrainHalf;
+      const z = (detailRandom() * 2 - 1) * terrainHalf;
+
+      const waterDistance = distanceFromWater(x, z);
+
+      // Keep the water surface and banks unobstructed.
+      if (waterDistance < 0.65) continue;
+
+      const shorelineFade = smoothstep(
+        0.65,
+        2.6,
+        waterDistance
+      );
+
+      const edgeDistance = Math.min(
+        terrainHalf - Math.abs(x),
+        terrainHalf - Math.abs(z)
+      );
+
+      const edgeFade = smoothstep(
+        0.2,
+        1.5,
+        edgeDistance
+      );
+
+      const slope = terrainSlope(x, z);
+      const slopeFade = 1 - smoothstep(0.35, 0.9, slope);
+
+      const density =
+        shorelineFade * edgeFade * slopeFade * 0.76;
+
+      if (detailRandom() > density) continue;
+
+      const y = 0.012 + heightAt(x, z);
+
+      grassPositions.push({
+        x,
+        y,
+        z,
+        scale: (0.65 + detailRandom() * 0.7) *
+               (0.55 + shorelineFade * 0.45),
+        rotation: detailRandom() * Math.PI * 2,
+        color: pickColor(grassPalette)
+      });
+    }
+
+    // Moss forms low, soft clusters near damp areas.
+    // It stays close to the terrain surface.
+    for (let i = 0; i < 550; i++) {
+      const x = (detailRandom() * 2 - 1) * terrainHalf;
+      const z = (detailRandom() * 2 - 1) * terrainHalf;
+
+      const waterDistance = distanceFromWater(x, z);
+
+      if (waterDistance < 0.38) continue;
+
+      const shorelinePresence =
+        1 - smoothstep(1.0, 5.0, waterDistance);
+
+      const probability =
+        0.18 + shorelinePresence * 0.55;
+
+      if (detailRandom() > probability) continue;
+
+      const edgeDistance = Math.min(
+        terrainHalf - Math.abs(x),
+        terrainHalf - Math.abs(z)
+      );
+
+      if (edgeDistance < 0.5) continue;
+
+      const y = 0.012 + heightAt(x, z);
+
+      mossPositions.push({
+        x,
+        y,
+        z,
+        scale: 0.55 + detailRandom() * 0.9,
+        rotation: detailRandom() * Math.PI * 2,
+        color: pickColor(mossPalette)
+      });
+    }
+
+    // Small stones are scattered inland, never directly
+    // across the river or pond.
+    for (let i = 0; i < 300; i++) {
+      const x = (detailRandom() * 2 - 1) * terrainHalf;
+      const z = (detailRandom() * 2 - 1) * terrainHalf;
+
+      const waterDistance = distanceFromWater(x, z);
+
+      if (waterDistance < 0.5) continue;
+
+      if (detailRandom() > 0.36) continue;
+
+      const edgeDistance = Math.min(
+        terrainHalf - Math.abs(x),
+        terrainHalf - Math.abs(z)
+      );
+
+      if (edgeDistance < 0.6) continue;
+
+      stonePositions.push({
+        x,
+        y: 0.012 + heightAt(x, z),
+        z,
+        scale: 0.45 + detailRandom() * 0.95,
+        rotation: detailRandom() * Math.PI * 2,
+        color: pickColor(stonePalette)
+      });
+    }
+
+    return {
+      geometry,
+      grassPositions,
+      mossPositions,
+      stonePositions
+    };
+
   }, [seed]);
 
   useEffect(() => {
-    return () => terrain.dispose();
+    return () => terrain.geometry.dispose();
   }, [terrain]);
 
   return (
+    <>
     <mesh
-      geometry={terrain}
+      geometry={terrain.geometry}
       receiveShadow
       raycast={() => null}
     >
       <meshStandardMaterial
-        color={night ? "#168451" : "#25c653"}
+        color={night ? "#a0c4b0" : "#ffffff"}
+        vertexColors
         roughness={0.92}
         metalness={0}
         side={2}
       />
     </mesh>
+
+    <TerrainDetailInstances
+      instances={terrain.grassPositions}
+      kind="grass"
+      night={night}
+    />
+
+    <TerrainDetailInstances
+      instances={terrain.mossPositions}
+      kind="moss"
+      night={night}
+    />
+
+    <TerrainDetailInstances
+      instances={terrain.stonePositions}
+      kind="stone"
+      night={night}
+    />
+    </>
   );
 }
