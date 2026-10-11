@@ -8,6 +8,10 @@ export interface ActivityEvent {
   status: ActivityStatus;
   idleSeconds: number;
   timestamp: number;
+  category: "productivity" | "leisure" | "idle";
+  reason?: string;
+  appName?: string;
+  source?: "foreground-window" | "unavailable";
 }
 
 declare global {
@@ -17,6 +21,10 @@ declare global {
       loadWorld: () => Promise<WorldState | null>;
 
       saveWorld: (world: WorldState) => Promise<boolean>;
+
+      copyBrowserPairingKey: () => Promise<boolean>;
+      showActivityRulesFile: () => Promise<boolean>;
+      showBrowserExtensionFolder: () => Promise<boolean>;
 
       // Get current system activity
       getCurrentActivity: () => Promise<ActivityEvent | null>;

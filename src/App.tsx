@@ -30,6 +30,7 @@ import "./App.css";
 import FastForwardControls from "./FastForwardControls";
 import { nextSimulationSpeed, type SimulationSpeed } from "./simulation/timeControls";
 import { ActivityStats, BuildingInsights } from "./EdenInsights";
+import type { ActivityEvent } from "./edenAPI";
 
 // Unit geometries are shared by every instance, including every plant leaf.
 // Their lifetime is the renderer module's lifetime; individual batches own only
@@ -826,6 +827,7 @@ function App() {
   const addBuilding = useWorldStore(state => state.addBuilding);
   const addPlant = useWorldStore(state => state.addPlant);
   const resetWorld = useWorldStore(state => state.resetWorld);
+  const [monitorStatus, setMonitorStatus] = useState<ActivityEvent | null>(null);
 
 useEffect(() => {
     const api = window.edenAPI;
@@ -843,6 +845,7 @@ useEffect(() => {
       if (!mounted || activity.timestamp < latestTimestamp) return;
 
       latestTimestamp = activity.timestamp;
+      setMonitorStatus(activity as ActivityEvent);
       setSystemIdle(activity.status === "idle");
 
       if (activity.category && activity.status !== "idle") {
@@ -901,7 +904,7 @@ useEffect(() => {
       // Wheel events can arrive dozens of times per second.
       const now = Date.now();
       // Only track window input when running in a browser.
-      // Electron already tracks activity across the entire Mac.
+      // Electron already tracks activity across the entire computer.
       if (!window.edenAPI) {
         if (now - lastInput >= 200) { recordInput(); lastInput = now; }
       }
@@ -998,6 +1001,25 @@ useEffect(() => {
           </select>
           <button type="button" onClick={handleAddPlant} style={CONTROL_STYLE}>Add plant</button>
           <FastForwardControls />
+          {window.edenAPI && (
+            <>
+              <small aria-live="polite">Monitor: {monitorStatus?.appName || "Starting"} · {monitorStatus?.category || "unknown"} {monitorStatus?.reason ? `(${monitorStatus.reason.replaceAll("_", " ")})` : ""}</small>
+              <button type="button" style={CONTROL_STYLE} onClick={async () => {
+                try {
+                  const ok = await window.edenAPI?.copyBrowserPairingKey();
+                  setNotice(ok ? "Browser pairing key copied. Paste it into the Eden browser extension." : "Browser bridge unavailable. Check the Electron console.");
+                } catch { setNotice("Could not copy the browser pairing key."); }
+              }}>Copy browser pairing key</button>
+              <button type="button" style={CONTROL_STYLE} onClick={async () => {
+                try { await window.edenAPI?.showBrowserExtensionFolder(); }
+                catch { setNotice("Could not locate the browser extension."); }
+              }}>Open browser extension folder</button>
+              <button type="button" style={CONTROL_STYLE} onClick={async () => {
+                try { await window.edenAPI?.showActivityRulesFile(); }
+                catch { setNotice("Could not open activity rules."); }
+              }}>Edit activity rules</button>
+            </>
+          )}
           <label><input type="checkbox" checked={showGrid} onChange={event => setShowGrid(event.target.checked)} /> Show grid</label>
           <label><input type="checkbox" checked={shadows} onChange={event => setShadows(event.target.checked)} /> Shadows</label>
           <button type="button" style={CONTROL_STYLE} onClick={() => {

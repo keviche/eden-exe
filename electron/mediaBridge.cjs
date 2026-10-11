@@ -85,7 +85,7 @@ function createMediaBridge(onChange = () => {}, options = {}) {
         try { data = JSON.parse(text); } catch { reply(400, { ok: false }); return; }
         if (!data || typeof data !== "object" || !BROWSERS.has(data.browser) ||
             typeof data.hostname !== "string" ||
-            !/^[a-z0-9.-]{1,180}$/.test(data.hostname) ||
+            !/^[a-z0-9.-]{0,180}$/.test(data.hostname) ||
             typeof data.playing !== "boolean" ||
             typeof data.title !== "string" || data.title.length > 300) {
           reply(400, { ok: false });
@@ -121,9 +121,9 @@ function createMediaBridge(onChange = () => {}, options = {}) {
     start,
     getPairingCode() { return server?.listening ? secret : null; },
     getPort() { return server?.listening ? server.address().port : null; },
-    getStatus(browser) {
+    getStatus(browser, maxAgeMs = EXPIRY_MS) {
       const item = samples.get(browser);
-      return item && Date.now() - item.at <= EXPIRY_MS ? { ...item } : null;
+      return item && Date.now() - item.at <= maxAgeMs ? { ...item } : null;
     },
     async stop() {
       samples.clear();

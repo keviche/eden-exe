@@ -1,0 +1,88 @@
+{
+  "files": {
+    ".github/workflows/desktop-build.yml": {
+      "existed": false,
+      "installed_hash": "d2a3fbb1475b3b79b7e6920c1bcdfba6c32a30ffbd52eaf7b1ec15b4750e1ddc"
+    },
+    "WINDOWS_MAC_SUPPORT.md": {
+      "existed": false,
+      "installed_hash": "239275eb5355e180e6f4967f6df039b65f934957e4232db0b9670927182ea3cf"
+    },
+    "browser-extension/README.md": {
+      "existed": true,
+      "installed_hash": "a2c19b020d7fa2e69ebef9fc41627ded97ab3337c8eabc671bf76380510eb9be"
+    },
+    "browser-extension/background.js": {
+      "existed": true,
+      "installed_hash": "238d4dc17bb1555cefae507a05ad3b1d635dc57e7d05f5d7ab8afaf47d35862a"
+    },
+    "browser-extension/manifest.json": {
+      "existed": true,
+      "installed_hash": "a47881fd89560a486697c6799efb822a6261b9c2e2dc66c287c7bcc04be951f5"
+    },
+    "electron-builder.yml": {
+      "existed": false,
+      "installed_hash": "fe0903523d05b4e9615910447f8181213470b842cf7702b3f563b9c739234fc7"
+    },
+    "electron/activityMonitor.cjs": {
+      "existed": true,
+      "installed_hash": "10be0eebc9218457d5994435c1350fd7a56052b56e593e6c63ec9798bd6d109b"
+    },
+    "electron/activityMonitor.test.cjs": {
+      "existed": true,
+      "installed_hash": "41d2433439509be5e0211f52a38eb2b390f1ba1f911a08e97d689c2f8ab0e5fa"
+    },
+    "electron/activityMonitor.test.js": {
+      "existed": true,
+      "installed_hash": "e5011b936cbe9edd4be10a1117e9fcab344aadc611a2a8c546d48bd1249f4987"
+    },
+    "electron/activityRules.cjs": {
+      "existed": true,
+      "installed_hash": "cd83b4ddaabeb2d2b54e6aede803cddfd4ac8ca19ebfcd51a88584806a369cf7"
+    },
+    "electron/icon.ico": {
+      "existed": false,
+      "installed_hash": "aa2a12ac7627ffed9f342e88fb29d5fd1fee1d3b92d54a4705bbcf3c34384686"
+    },
+    "electron/main.cjs": {
+      "existed": true,
+      "installed_hash": "45a8796589b97d774a87db56c06388942d4982ca76a33898e1032fd63b66f137"
+    },
+    "electron/mediaBridge.cjs": {
+      "existed": true,
+      "installed_hash": "7fb8abacb27ffc86877d3445419b11d6cd6697775362bdfd09a5d31f3784b30a"
+    },
+    "electron/preload.cjs": {
+      "existed": true,
+      "installed_hash": "f11dae7ea3bccb65003c28225ecdfe85062e25c455f18e9b68db561d9f2abf5d"
+    },
+    "electron/tray.png": {
+      "existed": false,
+      "installed_hash": "6d3496ff3520accce9c0e6b986bfbbcf37992a08219981d4548d93d30151d88e"
+    },
+    "electron/windowsForeground.cjs": {
+      "existed": false,
+      "installed_hash": "d083cf32f5c864e3b17fa47b16afa1410bad5537b77e93ae95932f2942b40838"
+    },
+    "electron/windowsForeground.ps1": {
+      "existed": false,
+      "installed_hash": "86a62bb693de54cb51fb470a42f308ad9c6e1a0afc67d132b505249461473e9d"
+    },
+    "electron/windowsForeground.test.cjs": {
+      "existed": false,
+      "installed_hash": "9e066a3aed83b9afa4266ba0002af217c07847f560c114ddeb01badeb6b515c1"
+    },
+    "package.json": {
+      "existed": true,
+      "installed_hash": "82167c66eff68dadbd681abb5a9fc07317030b2db390d93076aeddc2ca631afc"
+    },
+    "src/App.tsx": {
+      "existed": true,
+      "installed_hash": "f18a68af2543e844ed8796fd37acc24651bb0ba20fad821c1d283f530e4b14ad"
+    },
+    "src/edenAPI.d.ts": {
+      "existed": true,
+      "installed_hash": "ed84179be4dd6e0b538010cea020a0a21c06c2f6638d8e852e8e66b41fc0940d"
+    }
+  }
+}

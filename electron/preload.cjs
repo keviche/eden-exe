@@ -7,6 +7,11 @@ contextBridge.exposeInMainWorld("edenAPI", {
   saveWorld: (world) =>
     ipcRenderer.invoke("world:save", world),
 
+  // Optional local companion setup, only available to Eden's own renderer.
+  copyBrowserPairingKey: () => ipcRenderer.invoke("media:copy-pairing-key"),
+  showActivityRulesFile: () => ipcRenderer.invoke("activity:show-rules-file"),
+  showBrowserExtensionFolder: () => ipcRenderer.invoke("browser:show-extension-folder"),
+
   // Get the current system activity status
   getCurrentActivity: () =>
     ipcRenderer.invoke("activity:get-current"),

@@ -29,7 +29,8 @@ const PRODUCTIVE_APPS = new Set([
   "linear", "finder", "raycast", "alfred", "pdfgear", "updf",
   "foxit pdf reader", "foxit reader", "adobe acrobat reader dc",
   "jasp", "jamovi", "minitab", "stata", "ibm spss statistics",
-  "mathematica", "wolfram mathematica", "tableau desktop",
+  "mathematica", "wolfram mathematica", "tableau desktop", "windows terminal", "powershell", "command prompt",
+  "notepad", "file explorer", "visual studio",
 ]);
 const PRODUCTIVE_BUNDLE_IDS = new Set([
   "com.microsoft.VSCode", "com.todesktop.230313mzl4w4u92", // Cursor (may vary)

@@ -1,0 +1,34 @@
+appId: com.edenexe.desktop
+productName: Eden.exe
+artifactName: "Eden-${version}-${os}-${arch}.${ext}"
+directories:
+  output: release
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+  - "!electron/*.test.*"
+  - "!electron/*.check.cjs"
+extraResources:
+  - from: electron/windowsForeground.ps1
+    to: windowsForeground.ps1
+  - from: browser-extension
+    to: browser-extension
+asar: true
+asarUnpack:
+  - "**/node_modules/active-win/**"
+win:
+  icon: electron/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  executableName: Eden
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+mac:
+  category: public.app-category.productivity
+  target:
+    - zip

@@ -1,30 +1,58 @@
 {
   "manifest_version": 3,
-  "name": "Eden.exe Video Presence",
-  "version": "1.0.0",
-  "description": "Locally reports whether a video is playing in the focused browser tab to Eden.exe. No history is stored or transmitted online.",
-  "permissions": ["storage"],
+  "name": "Eden.exe Browser Activity Companion",
+  "version": "1.1.0",
+  "description": "Locally shares the focused tab hostname and optional video playback with Eden.exe. No browsing history or URLs with paths are sent.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms"
+  ],
   "host_permissions": [
     "http://127.0.0.1/*",
-    "*://*.youtube.com/*", "*://*.netflix.com/*", "*://*.twitch.tv/*",
-    "*://*.disneyplus.com/*", "*://*.hulu.com/*", "*://*.max.com/*",
-    "*://*.hbomax.com/*", "*://*.primevideo.com/*", "*://tv.apple.com/*",
-    "*://*.peacocktv.com/*", "*://*.vimeo.com/*", "*://*.crunchyroll.com/*",
-    "*://*.tubitv.com/*", "*://*.pluto.tv/*"
+    "*://*.youtube.com/*",
+    "*://*.netflix.com/*",
+    "*://*.twitch.tv/*",
+    "*://*.disneyplus.com/*",
+    "*://*.hulu.com/*",
+    "*://*.max.com/*",
+    "*://*.hbomax.com/*",
+    "*://*.primevideo.com/*",
+    "*://tv.apple.com/*",
+    "*://*.peacocktv.com/*",
+    "*://*.vimeo.com/*",
+    "*://*.crunchyroll.com/*",
+    "*://*.tubitv.com/*",
+    "*://*.pluto.tv/*"
   ],
-  "background": { "service_worker": "background.js" },
-  "content_scripts": [{
-    "matches": [
-      "*://*.youtube.com/*", "*://*.netflix.com/*", "*://*.twitch.tv/*",
-      "*://*.disneyplus.com/*", "*://*.hulu.com/*", "*://*.max.com/*",
-      "*://*.hbomax.com/*", "*://*.primevideo.com/*", "*://tv.apple.com/*",
-      "*://*.peacocktv.com/*", "*://*.vimeo.com/*", "*://*.crunchyroll.com/*",
-      "*://*.tubitv.com/*", "*://*.pluto.tv/*"
-    ],
-    "js": ["content.js"],
-    "run_at": "document_idle",
-    "all_frames": true
-  }],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.netflix.com/*",
+        "*://*.twitch.tv/*",
+        "*://*.disneyplus.com/*",
+        "*://*.hulu.com/*",
+        "*://*.max.com/*",
+        "*://*.hbomax.com/*",
+        "*://*.primevideo.com/*",
+        "*://tv.apple.com/*",
+        "*://*.peacocktv.com/*",
+        "*://*.vimeo.com/*",
+        "*://*.crunchyroll.com/*",
+        "*://*.tubitv.com/*",
+        "*://*.pluto.tv/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
   "action": {
     "default_title": "Eden.exe Video Presence",
     "default_popup": "popup.html"
