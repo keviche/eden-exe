@@ -59,11 +59,17 @@ function randomCell(seed: number, max: number) {
 function createBuilding(world: WorldState, at: number): Building | null {
   if (world.buildings.length >= MAX_BUILDINGS) return null;
   const residents = residentOccupiedPlots(world.residents);
-  const catalog = BUILDING_CATALOG;
+  // Let the growing city feel cottage-scale and garden-led while keeping every
+  // existing building type available to the simulation.
+  const catalog: (typeof BUILDING_CATALOG)[number][] = [];
+  for (const entry of BUILDING_CATALOG) {
+    const copies = entry.id === "solar-house" ? 4 : entry.id === "greenhouse" ? 2 : 1;
+    for (let copy = 0; copy < copies; copy++) catalog.push(entry);
+  }
   for (let attempt = 0; attempt < catalog.length; attempt++) {
     const config = catalog[Math.floor(Math.random() * catalog.length)]!;
     const plot = findFreePlot([...world.buildings, ...residents], world.plants, config.width, config.depth);
-    if (!plot) return null;
+    if (!plot) continue;
     return { type: "building", id: createId("building"), name: config.name, variantId: config.id, gridPosition: plot, footprint: { width: config.width, depth: config.depth }, rotation: 0, floors: Math.min(config.floors, MAX_BUILDING_FLOORS), moss: 0, createdAt: at };
   }
   return null;

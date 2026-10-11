@@ -150,18 +150,18 @@ function planter(b: Builder, at: Vec3, size = 0.18) {
 function solarPanel(b: Builder, at: Vec3, width: number, depth: number, tilt = 0.22) {
   b.group(at, [tilt, 0, 0], [1, 1, 1], () => {
     b.box([width, 0.035, depth], [0, 0, 0], "#dce8df", [0, 0, 0], "metal");
-    b.box([width - 0.035, 0.01, depth - 0.035], [0, 0.024, 0], "#22516b", [0, 0, 0], "solar");
-    b.box([0.008, 0.006, depth - 0.035], [0, 0.032, 0], "#83b9c5");
-    b.box([width - 0.035, 0.006, 0.008], [0, 0.032, 0], "#83b9c5");
+    b.box([width - 0.035, 0.01, depth - 0.035], [0, 0.024, 0], "#087fa8", [0, 0, 0], "solar");
+    b.box([0.012, 0.006, depth - 0.035], [0, 0.032, 0], "#d6fbff");
+    b.box([width - 0.035, 0.006, 0.012], [0, 0.032, 0], "#d6fbff");
   });
 }
 
 function windowPane(b: Builder, at: Vec3, yaw: number, width = 0.34, height = 0.36) {
   b.group(at, [0, yaw, 0], [1, 1, 1], () => {
-    b.box([width + 0.065, height + 0.065, 0.04], [0, 0, 0], "#285c57");
-    b.box([width, height, 0.012], [0, 0, 0.027], "#c4eee4", [0, 0, 0], "glass");
-    b.box([0.018, height, 0.018], [0, 0, 0.038], "#f2ecd9");
-    b.box([width + 0.1, 0.035, 0.095], [0, -height / 2 - 0.03, 0.015], "#f2ecd9");
+    b.box([width + 0.065, height + 0.065, 0.04], [0, 0, 0], "#f4d693");
+    b.box([width, height, 0.012], [0, 0, 0.027], "#70e5f3", [0, 0, 0], "glass");
+    b.box([0.018, height, 0.018], [0, 0, 0.038], "#fff2cb");
+    b.box([width + 0.1, 0.035, 0.095], [0, -height / 2 - 0.03, 0.015], "#fff2cb");
   });
 }
 
@@ -191,31 +191,33 @@ function facade(b: Builder, width: number, depth: number, floors: number, floorH
 
 function entrance(b: Builder, width: number, depth: number, stage: number) {
   const front = depth / 2;
-  b.box([0.44, 0.7, 0.05], [0, 0.47, front + 0.025], "#345e54");
-  b.box([0.36, 0.64, 0.025], [0, 0.44, front + 0.06], "#b88a65");
-  b.box([0.24, 0.27, 0.015], [0, 0.57, front + 0.079], "#c5eee0", [0, 0, 0], "glass");
-  b.add("sphere", [0.12, 0.4, front + 0.093], [0.018, 0.018, 0.018], "#e6bf71", [0, 0, 0], "metal");
-  b.box([0.62, 0.055, 0.28], [0, 0.9, front + 0.08], "#377f71");
-  b.box([0.6, 0.12, 0.22], [0, 0.06, front + 0.09], "#d5d4bc");
+  b.box([0.48, 0.76, 0.05], [0, 0.48, front + 0.025], "#9c583b");
+  b.box([0.37, 0.66, 0.025], [0, 0.44, front + 0.06], "#d99c62");
+  b.add("sphere", [0, 0.83, front + 0.044], [0.27, 0.27, 0.055], "#fff0c1");
+  b.add("sphere", [0, 0.84, front + 0.093], [0.205, 0.21, 0.022], "#ffc96b", [0, 0, 0], "glass");
+  b.box([0.22, 0.27, 0.015], [0, 0.54, front + 0.112], "#fff0a7", [0, 0, 0], "glass");
+  b.add("sphere", [0.12, 0.4, front + 0.13], [0.02, 0.02, 0.02], "#f7d269", [0, 0, 0], "metal");
+  b.box([0.62, 0.055, 0.28], [0, 0.91, front + 0.08], "#f0c176");
+  b.box([0.6, 0.12, 0.22], [0, 0.06, front + 0.09], "#fff1cd");
   if (stage > 0) for (const side of [-1, 1]) planter(b, [side * width * 0.36, 0, front + 0.1], 0.17);
 }
 
 function flatRoof(b: Builder, width: number, depth: number, y: number) {
-  b.box([width + 0.14, 0.08, depth + 0.14], [0, y + 0.02, 0], "#edf0df");
-  b.box([width, 0.045, depth], [0, y + 0.08, 0], "#83ad76");
+  b.box([width + 0.14, 0.08, depth + 0.14], [0, y + 0.02, 0], "#fff1c4");
+  b.box([width, 0.045, depth], [0, y + 0.08, 0], "#69c65c");
   for (const side of [-1, 1]) {
-    b.box([width + 0.12, 0.1, 0.06], [0, y + 0.11, side * (depth / 2 + 0.025)], "#dce6ce");
-    b.box([0.06, 0.1, depth + 0.1], [side * (width / 2 + 0.025), y + 0.11, 0], "#dce6ce");
+    b.box([width + 0.12, 0.1, 0.06], [0, y + 0.11, side * (depth / 2 + 0.025)], "#fff0bf");
+    b.box([0.06, 0.1, depth + 0.1], [side * (width / 2 + 0.025), y + 0.11, 0], "#fff0bf");
   }
 }
 
 function buildBuilding(variant: string, width: number, depth: number, stage: number, seed: number, floorsOverride?: number, moss = 0): Model {
   const b = new Builder();
   const base = 0.12;
-  const floorHeight = 1.05;
+  const floorHeight = 0.86;
   const config = BUILDING_CATALOG.find(entry => entry.id === variant) ?? BUILDING_CATALOG[0];
   const floors = Math.min(MAX_BUILDING_FLOORS, Math.max(1, Math.round(floorsOverride ?? (1 + (config.floors - 1) * stage / 2))));
-  const colors = ["#c99f76", "#d2ad84", "#b88e68", "#d7bd98"];
+  const colors = ["#e8bd7d", "#f2d49a", "#c98f5e", "#f5e0b1"];
   const wallColor = colors[seed % colors.length]!;
   b.box([width + 0.1, base, depth + 0.1], [0, base / 2, 0], "#acb6a4");
 
@@ -261,7 +263,7 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
 
   if (variant === "greenhouse") {
     const height = floors * floorHeight;
-    b.box([width, height, depth], [0, base + height / 2, 0], "#a4d9ce", [0, 0, 0], "greenhouse");
+    b.box([width, height, depth], [0, base + height / 2, 0], "#66daca", [0, 0, 0], "greenhouse");
     for (let column = 0; column <= 4; column++) {
       const x = (column / 4 - 0.5) * width;
       for (const side of [-1, 1]) b.box([0.045, height, 0.045], [x, base + height / 2, side * depth / 2], "#f1ead7");
@@ -272,7 +274,7 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
       b.box([0.045, 0.045, depth], [side * width / 2, base + height * 0.55, 0], "#eceddd");
     }
     for (let floor = 1; floor < floors; floor++) b.box([width + 0.06, 0.045, depth + 0.06], [0, base + floor * floorHeight, 0], "#f1ead7");
-    b.add("roof", [0, base + height + 0.3, 0], [width + 0.08, 0.6, depth + 0.08], "#bce4d9", [0, 0, 0], "greenhouse");
+    b.add("gable", [0, base + height + 0.3, 0], [width + 0.08, 0.6, depth + 0.08], "#b3f6ed", [0, 0, 0], "greenhouse");
     entrance(b, width, depth, stage);
     if (stage > 0) for (const side of [-1, 1]) {
       for (let plant = 0; plant < 3; plant++) planter(b, [(plant - 1) * width * 0.25, 0, side * (depth / 2 + 0.11)], 0.16);
@@ -306,11 +308,13 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
     if (stage > 0) solarPanel(b, [0, roofY + 0.25, 0], topWidth * 0.62, topDepth * 0.4);
     if (stage === 2) planter(b, [0, roofY + 0.1, -topDepth * 0.3], 0.24);
   } else {
-    roofY = facade(b, width, depth, floors, floorHeight, variant === "solar-workshop" ? "#aad6c4" : wallColor);
-    if (variant === "solar-house" || !BUILDING_CATALOG.some(entry => entry.id === variant)) {
+    roofY = facade(b, width, depth, floors, floorHeight, variant === "solar-workshop" ? "#a8e2d5" : variant === "community-library" ? "#f4dfae" : wallColor);
+    if (variant === "solar-house" || variant === "solar-workshop" || variant === "community-library" || !BUILDING_CATALOG.some(entry => entry.id === variant)) {
       const roofHeight = 0.48, roofDepth = depth + 0.16;
-      b.box([width + 0.13, 0.065, depth + 0.13], [0, roofY, 0], "#eee7d2");
-      b.add("gable", [0, roofY + roofHeight / 2, 0], [width + 0.16, roofHeight, roofDepth], "#765842");
+      b.box([width + 0.13, 0.065, depth + 0.13], [0, roofY, 0], "#fff0c7");
+      const roofColors = ["#b85f42", "#9e5840", "#c46c49", "#a66144"];
+      b.add("gable", [0, roofY + roofHeight / 2, 0], [width + 0.16, roofHeight, roofDepth], roofColors[seed % roofColors.length]!);
+      for (const side of [-1, 1]) b.box([0.075, floors * floorHeight, 0.045], [side * (width / 2 - 0.12), base + floors * floorHeight / 2, depth / 2 + 0.035], "#9c5e3d");
       if (stage > 0) for (const side of [-1, 1]) {
         const tilt = Math.atan2(roofHeight, roofDepth / 2);
         solarPanel(b, [side * width * 0.16, roofY + roofHeight * 0.3 + 0.04 * Math.cos(tilt), roofDepth * 0.35 + 0.04 * Math.sin(tilt)], width * 0.2, Math.hypot(roofHeight, roofDepth / 2) * 0.36, tilt);
@@ -365,12 +369,12 @@ function buildPlant(species: string, seed: number): Model {
       for (let row = 1; row < points.length; row++) {
         const point = points[row]!;
         b.stem(points[row - 1]!, point, 0.009);
-        for (const side of [-1, 1]) b.leaf([side * 0.06, point[1] + 0.04, point[2] + 0.015], [0.35, 0, -side], 0.18 - (row - 1) * 0.035, 0.065 - (row - 1) * 0.01, (row + frond) % 2 === 0 ? "#75bb78" : "#409566");
+        for (const side of [-1, 1]) b.leaf([side * 0.06, point[1] + 0.04, point[2] + 0.015], [0.35, 0, -side], 0.18 - (row - 1) * 0.035, 0.065 - (row - 1) * 0.01, (row + frond) % 2 === 0 ? "#78df76" : "#29ac68");
       }
-      b.leaf([0, 0.42, 0.39], [1, 0, 0], 0.16, 0.055, "#8acb86");
+      b.leaf([0, 0.42, 0.39], [1, 0, 0], 0.16, 0.055, "#a2ed7e");
     });
   } else if (species === "flower") {
-    const petalColor = ["#eaa6b2", "#f0d28d", "#c0afe5", "#f3e9cf"][seed % 4]!;
+    const petalColor = ["#ff7f95", "#ffd54d", "#ba8aff", "#fff1a3"][seed % 4]!;
     const stalks = [[-0.16, 0.02, 0.61], [0.15, 0.07, 0.47], [0.02, -0.14, 0.76]];
     stalks.forEach(([x, z, height], index) => b.group([x!, 0, z!], [0, index * 1.7, 0], [1, 1, 1], () => {
       b.stem([0, 0, 0], [0, height!, 0], 0.014);
@@ -386,19 +390,19 @@ function buildPlant(species: string, seed: number): Model {
     b.stem([0, 0, 0], [0, 0.98, 0], 0.075, "#977652");
     for (const side of [-1, 1]) b.stem([0, 0.53, 0], [side * 0.23, 0.89, 0.03], 0.028, "#977652");
     [[0, 1.02, 0, 0.33], [-0.23, 0.89, 0.03, 0.27], [0.22, 0.92, 0.02, 0.28], [0, 0.95, -0.23, 0.26], [0.04, 1.23, -0.025, 0.25]].forEach(([x, y, z, radius], index) => {
-      b.foliage([x!, y!, z!], radius!, ["#548e60", "#73a866", "#8bb774"][(seed + index) % 3]!);
+      b.foliage([x!, y!, z!], radius!, ["#31ae55", "#59cf56", "#87da65"][(seed + index) % 3]!);
     });
   } else if (species === "grass" || species === "moss") {
     for (let blade = 0; blade < 7; blade++) {
       const length = 0.42 + blade % 3 * 0.1, tilt = 0.2 + blade % 3 * 0.16;
       b.group([0, 0, 0], [0, blade * 2.4, 0], [1, 1, 1], () => {
-        b.leaf([0, length / 2 * Math.cos(tilt), length / 2 * Math.sin(tilt)], [tilt, 0, 0], length, 0.055, (seed + blade) % 2 === 0 ? "#93bd76" : "#619c64");
+        b.leaf([0, length / 2 * Math.cos(tilt), length / 2 * Math.sin(tilt)], [tilt, 0, 0], length, 0.055, (seed + blade) % 2 === 0 ? "#a0e46f" : "#36b765");
       });
     }
   } else {
     b.stem([0, 0, 0], [0, 0.27, 0], 0.035, "#817152");
     [[-0.2, 0.26, 0.02, 0.22], [0.2, 0.27, 0.05, 0.23], [0, 0.28, -0.18, 0.24], [0, 0.42, 0.01, 0.27]].forEach(([x, y, z, radius], index) => {
-      b.foliage([x!, y!, z!], radius!, index % 2 === 0 ? "#478d61" : "#71aa69");
+      b.foliage([x!, y!, z!], radius!, index % 2 === 0 ? "#2aa757" : "#75ce58");
     });
     if (seed % 3 === 0) for (let berry = 0; berry < 5; berry++) b.add("sphere", [Math.cos(berry * 2.4) * 0.22, 0.46 + berry % 2 * 0.08, Math.sin(berry * 2.4) * 0.22], [0.027, 0.027, 0.027], "#df927d");
   }
@@ -461,14 +465,21 @@ export function findFreePlot(buildings: readonly Plot[], plants: readonly Plot[]
       for (let x = Math.max(0, left); x < Math.min(GRID_SIZE, right); x++) occupied[z * GRID_SIZE + x] = 1;
     }
   }
-  for (let z = 0; z <= GRID_SIZE - depth; z++) {
-    for (let x = 0; x <= GRID_SIZE - width; x++) {
-      let free = true;
-      for (let dz = 0; dz < depth && free; dz++) {
-        for (let dx = 0; dx < width; dx++) if (occupied[(z + dz) * GRID_SIZE + x + dx]) { free = false; break; }
-      }
-      if (free) return { x, z };
+  // Grow a compact little village around the center rather than filling the
+  // back edge first. This keeps the first activity-driven structures visible
+  // and gives later additions room to spread naturally across the same grid.
+  const candidates: { x: number; z: number; distance: number }[] = [];
+  const centerX = (GRID_SIZE - width) / 2, centerZ = (GRID_SIZE - depth) / 2;
+  for (let z = 0; z <= GRID_SIZE - depth; z++) for (let x = 0; x <= GRID_SIZE - width; x++) {
+    candidates.push({ x, z, distance: (x - centerX) ** 2 + (z - centerZ) ** 2 });
+  }
+  candidates.sort((a, b) => a.distance - b.distance || a.z - b.z || a.x - b.x);
+  for (const { x, z } of candidates) {
+    let free = true;
+    for (let dz = 0; dz < depth && free; dz++) {
+      for (let dx = 0; dx < width; dx++) if (occupied[(z + dz) * GRID_SIZE + x + dx]) { free = false; break; }
     }
+    if (free) return { x, z };
   }
   return null;
 }
