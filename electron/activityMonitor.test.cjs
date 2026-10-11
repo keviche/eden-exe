@@ -290,3 +290,103 @@ test("Gmail lookalike domains are not productivity", () => {
     "unknown"
   );
 });
+
+
+test("Microsoft Outlook is productivity", () => {
+  assert.equal(
+    classifyActivity("Microsoft Outlook", "Inbox"),
+    "productivity"
+  );
+});
+
+test("Microsoft Word is productivity", () => {
+  assert.equal(
+    classifyActivity("Microsoft Word", "Document1"),
+    "productivity"
+  );
+});
+
+test("Microsoft PowerPoint is productivity", () => {
+  assert.equal(
+    classifyActivity("Microsoft PowerPoint", "Presentation1"),
+    "productivity"
+  );
+});
+
+test("Microsoft Excel is productivity", () => {
+  assert.equal(
+    classifyActivity("Microsoft Excel", "Workbook1"),
+    "productivity"
+  );
+});
+
+test("Microsoft OneNote is productivity", () => {
+  assert.equal(
+    classifyActivity("Microsoft OneNote", "Notes"),
+    "productivity"
+  );
+});
+
+test("Microsoft Teams is productivity", () => {
+  assert.equal(
+    classifyActivity("Microsoft Teams", "Meeting"),
+    "productivity"
+  );
+});
+
+test("Apple Mail is productivity", () => {
+  assert.equal(
+    classifyActivity("Mail", "Inbox"),
+    "productivity"
+  );
+});
+
+test("Apple Keynote is productivity", () => {
+  assert.equal(
+    classifyActivity("Keynote", "Presentation"),
+    "productivity"
+  );
+});
+
+test("Slack is productivity", () => {
+  assert.equal(
+    classifyActivity("Slack", "Workspace"),
+    "productivity"
+  );
+});
+
+test("Docker Desktop is productivity", () => {
+  assert.equal(
+    classifyActivity("Docker Desktop", "Containers"),
+    "productivity"
+  );
+});
+
+test("Spotify remains leisure", () => {
+  assert.equal(
+    classifyActivity("Spotify", "Playlist"),
+    "leisure"
+  );
+});
+
+test("Chrome ChatGPT remains productivity", () => {
+  assert.equal(
+    classifyActivity(
+      "Google Chrome",
+      "Generate Status Script",
+      "https://chatgpt.com/c/123"
+    ),
+    "productivity"
+  );
+});
+
+test("Chrome YouTube remains leisure", () => {
+  assert.equal(
+    classifyActivity(
+      "Google Chrome",
+      "Video title",
+      "https://www.youtube.com/watch?v=123"
+    ),
+    "leisure"
+  );
+});
