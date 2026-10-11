@@ -1,11 +1,15 @@
 import BubbleFilm from "./BubbleFilm";
 import { BOARD_SIZE } from "./edenModels";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
+import type { ThreeEvent } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import {
   AdditiveBlending,
   BackSide,
   Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
   MeshBasicMaterial,
   SphereGeometry,
 } from "three";
@@ -54,6 +58,18 @@ function reflectWithinBounds(
 const HEIGHT_RANGE = 15;
 const SPHERE = new SphereGeometry(1, 32, 24);
 
+// EDEN: clickable bubbles v1
+const POP_DURATION = 0.4;
+const RESPAWN_DELAY = 2.5;
+const SPARK_COUNT = 8;
+
+const SPARK_DIRECTIONS = Array.from({ length: SPARK_COUNT }, (_, index) => {
+  const y = 1 - ((index + 0.5) / SPARK_COUNT) * 2;
+  const horizontal = Math.sqrt(1 - y * y);
+  const angle = index * 2.399963229728653;
+  return [Math.cos(angle) * horizontal, y, Math.sin(angle) * horizontal] as const;
+});
+
 function randomGenerator(seed: number) {
   let value = seed >>> 0;
   return () => {
@@ -64,14 +80,81 @@ function randomGenerator(seed: number) {
 
 function BubbleMesh({ bubble }: { bubble: Bubble }) {
   const group = useRef<Group>(null);
-  const materials = useRef<MeshBasicMaterial[]>([]);
+  const shell = useRef<Group>(null);
+  const film = useRef<Mesh>(null);
+  const sparks = useRef<InstancedMesh>(null);
+  const sparkMaterial = useRef<MeshBasicMaterial>(null);
+  const clock = useThree(state => state.clock);
+  const matrix = useMemo(() => new Matrix4(), []);
+  const timeOffset = useRef(0);
+  const popped = useRef<{ started: number; scale: number } | null>(null);
+
+  function popBubble(event: ThreeEvent<MouseEvent>) {
+    event.stopPropagation();
+    const object = group.current;
+
+    // Camera drags and right clicks should not pop bubbles.
+    if (event.button !== 0 || event.delta > 5 || !object?.visible || popped.current) return;
+
+    popped.current = {
+      started: clock.getElapsedTime(),
+      scale: object.scale.x,
+    };
+
+    if (shell.current) shell.current.visible = false;
+  }
 
   useFrame(({ clock }) => {
     const object = group.current;
     if (!object) return;
 
     const t = clock.getElapsedTime();
-    const elapsed = t + bubble.phase - bubble.delay;
+    const pop = popped.current;
+
+    if (pop) {
+      const age = t - pop.started;
+
+      if (age < RESPAWN_DELAY) {
+        const progress = Math.min(1, age / POP_DURATION);
+        object.visible = age < POP_DURATION;
+        object.scale.setScalar(pop.scale);
+
+        if (shell.current) shell.current.visible = false;
+
+        if (sparks.current) {
+          sparks.current.visible = age < POP_DURATION;
+
+          const distance = bubble.radius * (0.65 + progress * 1.55);
+          const size = bubble.radius * 0.095 * (1 - progress) + 0.002;
+
+          SPARK_DIRECTIONS.forEach(([x, y, z], index) => {
+            matrix.makeScale(size, size, size).setPosition(
+              x * distance,
+              y * distance,
+              z * distance
+            );
+            sparks.current!.setMatrixAt(index, matrix);
+          });
+
+          sparks.current.instanceMatrix.needsUpdate = true;
+        }
+
+        if (sparkMaterial.current) {
+          sparkMaterial.current.opacity = 0.9 * (1 - progress);
+        }
+
+        return;
+      }
+
+      // Restart at the bottom of the path with the existing fade-in.
+      popped.current = null;
+      timeOffset.current = t + bubble.phase - bubble.delay;
+    }
+
+    if (shell.current) shell.current.visible = true;
+    if (sparks.current) sparks.current.visible = false;
+
+    const elapsed = t + bubble.phase - bubble.delay - timeOffset.current;
     const cycle = ((elapsed % bubble.lifetime) + bubble.lifetime) % bubble.lifetime;
 
     // Each cycle begins near the bottom and travels up through the sky.
@@ -110,7 +193,7 @@ function BubbleMesh({ bubble }: { bubble: Bubble }) {
 
     object.scale.setScalar(Math.max(0.001, opacity));
 
-    // Prevent picking bubbles with the mouse.
+    // Hide bubbles that have faded out.
     object.visible = opacity > 0.01;
   });
 
@@ -118,8 +201,22 @@ function BubbleMesh({ bubble }: { bubble: Bubble }) {
 
   return (
     <group ref={group} position={[bubble.x, MIN_HEIGHT + bubble.y, bubble.z]}>
+      <group ref={shell}>
       {/* Iridescent, glossy soap-film shader */}
-      <mesh geometry={SPHERE} scale={r} raycast={() => null}>
+      <mesh
+        ref={film}
+        geometry={SPHERE}
+        scale={r}
+        onClick={popBubble}
+        raycast={(raycaster, intersections) => {
+          const object = group.current;
+
+          // Ignore hidden, nearly vanished, or already popped bubbles.
+          if (film.current && object?.visible && object.scale.x > 0.1 && !popped.current) {
+            Mesh.prototype.raycast.call(film.current, raycaster, intersections);
+          }
+        }}
+      >
         <BubbleFilm />
       </mesh>
 
@@ -191,6 +288,25 @@ function BubbleMesh({ bubble }: { bubble: Bubble }) {
         <sphereGeometry args={[1, 10, 8]} />
         <meshBasicMaterial color="#ffffff" />
       </mesh>
+      </group>
+
+      <instancedMesh
+        ref={sparks}
+        args={[SPHERE, undefined, SPARK_COUNT]}
+        visible={false}
+        frustumCulled={false}
+        raycast={() => null}
+      >
+        <meshBasicMaterial
+          ref={sparkMaterial}
+          color="#d6ffff"
+          transparent
+          opacity={0.9}
+          depthWrite={false}
+          blending={AdditiveBlending}
+          toneMapped={false}
+        />
+      </instancedMesh>
     </group>
   );
 }
