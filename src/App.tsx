@@ -20,7 +20,7 @@ import { residentOccupiedPlots } from "./simulation/navigation";
 import {
   BOARD_SIZE, BUILDING_CATALOG, BUILDING_GROWTH_SECONDS, CELL_SIZE,
   GRID_SIZE, GROWTH_REFRESH_MS, batchParts, buildingDimensions, buildingModel, buildingProgress,
-  cellPoint, clamp01, compose, findFreePlot, findFreePlantSite, growthStage, hasExplicitGrowth,
+  cellPoint, compose, findFreePlot, findFreePlantSite, growthStage, hasExplicitGrowth,
   hashId, placeModel, plantModel, residentPoint,
 } from "./edenModels";
 import type { Batch, BuildingVariant, Part, Shape } from "./edenModels";
@@ -277,16 +277,6 @@ function WaterCourse({ seed }: { seed: number }) {
 
     // Put the lake and pond on opposite sides of the river.
     const lakeSide = random() < 0.5 ? -1 : 1;
-
-    const lakeRadiusX = range(1.8, 3.1);
-    const lakeRadiusZ = range(1.4, 2.5);
-
-    const lakeX = lakeSide *
-      range(BOARD_SIZE * 0.20, BOARD_SIZE * 0.29);
-    const lakeZ = range(
-      -BOARD_SIZE * 0.25,
-      BOARD_SIZE * 0.25
-    );
 
     const pondRadiusX = range(2.0, 3.8);
     const pondRadiusZ = range(1.7, 3.2);

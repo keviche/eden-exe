@@ -22,7 +22,7 @@ export type Plot = {
     width: number;
     depth: number;
   };
-  species?: "tree" | "shrub" | "fern" | "flower" | "grass";
+  species?: string;
 };
 
 export type ResidentCoordinates = "legacy-centered" | "grid" | "world";

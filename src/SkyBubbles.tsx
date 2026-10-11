@@ -6,7 +6,6 @@ import {
   AdditiveBlending,
   BackSide,
   Group,
-  MeshBasicMaterial,
   SphereGeometry,
 } from "three";
 
@@ -64,7 +63,6 @@ function randomGenerator(seed: number) {
 
 function BubbleMesh({ bubble }: { bubble: Bubble }) {
   const group = useRef<Group>(null);
-  const materials = useRef<MeshBasicMaterial[]>([]);
 
   useFrame(({ clock }) => {
     const object = group.current;
