@@ -15,15 +15,11 @@ export interface WorldPosition {
 }
 export type Vector3 = WorldPosition;
 export interface WorldGrid {
-  readonly width: 6;
-  readonly depth: 6;
+  readonly width: 20;
+  readonly depth: 20;
   cellSize: number;
   origin: WorldPosition;
 }
-export interface WorldSeed {
-  seed: number;
-}
-
 export interface Building {
   type: "building";
   id: EntityId;
@@ -34,6 +30,9 @@ export interface Building {
   gridPosition: GridPosition;
   footprint: { width: number; depth: number };
   rotation: number;
+  floors?: number;
+  moss?: number;
+  growth?: number;
   createdAt: number;
 }
 export interface Plant {
@@ -51,26 +50,29 @@ export interface Resident {
   name: string;
   position: WorldPosition;
   activity: ResidentActivity;
+  homeId?: EntityId;
+  route?: GridPosition[];
   createdAt: number;
 }
 export type WorldEntity = Building | Plant | Resident;
 
 export interface Weather {
-  condition: "sunny" | "cloudy" | "rainy" | "stormy";
+  condition: "sunny" | "cloudy" | "rainy";
   updatedAt: number;
+  cityDayKey?: string;
 }
 export interface ActivityState {
   category: ActivityCategory;
-  /** Accumulated active seconds by category. */
+  /** Accumulated activity minutes by category. */
   productivityPoints: number;
   leisurePoints: number;
   idlePoints: number;
 }
 export interface ProgressionState {
   unlockedBuildings: string[];
+  consumedMilestones: Record<ActivityCategory, number>;
 }
 export interface WorldState {
-  seed: WorldSeed;
   grid: WorldGrid;
   buildings: Building[];
   plants: Plant[];
@@ -80,4 +82,6 @@ export interface WorldState {
   activity: ActivityState;
   lastActiveAt: number;
   progression: ProgressionState;
+  cityDayKey: string;
+  cycleStartedAt: number;
 }

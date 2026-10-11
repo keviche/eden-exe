@@ -4,10 +4,11 @@ export const CELL_SIZE = 1.5;
 export const BOARD_SIZE = GRID_SIZE * CELL_SIZE;
 export const BUILDING_GROWTH_SECONDS = 300;
 export const GROWTH_REFRESH_MS = 2_000;
+export const MAX_BUILDING_FLOORS = 5;
 
 export type Vec3 = [number, number, number];
 export type Matrix = number[];
-export type Shape = "box" | "sphere" | "leaf" | "foliage" | "roof" | "cone" | "cylinder" | "stem" | "capsule";
+export type Shape = "box" | "sphere" | "leaf" | "foliage" | "roof" | "gable" | "cone" | "cylinder" | "stem" | "capsule";
 export type Finish = "matte" | "glass" | "greenhouse" | "solar" | "metal";
 export type Part = { shape: Shape; finish: Finish; color: string; matrix: Matrix };
 export type Model = readonly Part[];
@@ -208,13 +209,13 @@ function flatRoof(b: Builder, width: number, depth: number, y: number) {
   }
 }
 
-function buildBuilding(variant: string, width: number, depth: number, stage: number, seed: number): Model {
+function buildBuilding(variant: string, width: number, depth: number, stage: number, seed: number, floorsOverride?: number, moss = 0): Model {
   const b = new Builder();
   const base = 0.12;
   const floorHeight = 1.05;
   const config = BUILDING_CATALOG.find(entry => entry.id === variant) ?? BUILDING_CATALOG[0];
-  const floors = Math.max(1, Math.round(1 + (config.floors - 1) * stage / 2));
-  const colors = ["#e9dfc7", "#d2dfc8", "#e4cdb9", "#b5d8cb"];
+  const floors = Math.min(MAX_BUILDING_FLOORS, Math.max(1, Math.round(floorsOverride ?? (1 + (config.floors - 1) * stage / 2))));
+  const colors = ["#c99f76", "#d2ad84", "#b88e68", "#d7bd98"];
   const wallColor = colors[seed % colors.length]!;
   b.box([width + 0.1, base, depth + 0.1], [0, base / 2, 0], "#acb6a4");
 
@@ -228,15 +229,16 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
     for (const side of [-1, 1]) b.box([0.06, 0.32, 0.15], [side * width * 0.25, 0.2, -depth * 0.3], "#ba936e");
     if (stage > 0) planter(b, [0, base, 0], 0.26);
     if (stage === 2) for (const side of [-1, 1]) planter(b, [side * width * 0.3, base, depth * 0.3], 0.19);
+    addMoss(b, width, depth, base + y + 0.54, moss, seed);
     return b.parts;
   }
 
   if (variant === "wind-tower") {
-    const height = 1.25 + stage * 0.8;
+    const height = floors * floorHeight;
     const radius = Math.min(width, depth) * 0.25;
     b.add("cylinder", [0, base + height / 2, 0], [radius, height, radius], "#b7d8cb");
-    for (let floor = 0; floor <= stage; floor++) {
-      const y = base + 0.62 + floor * 0.74;
+    for (let floor = 0; floor < floors; floor++) {
+      const y = base + 0.62 + floor * floorHeight;
       b.add("cylinder", [0, y - 0.27, 0], [radius * 1.13, 0.065, radius * 1.13], "#f0e6cf");
       for (let face = 0; face < 4; face++) {
         const angle = face * Math.PI / 2;
@@ -253,11 +255,12 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
       });
     });
     if (stage === 2) for (const side of [-1, 1]) planter(b, [side * radius * 0.65, deck + 0.05, -radius * 0.35], 0.15);
+    addMoss(b, width, depth, deck + 0.1, moss, seed);
     return b.parts;
   }
 
   if (variant === "greenhouse") {
-    const height = 1.1;
+    const height = floors * floorHeight;
     b.box([width, height, depth], [0, base + height / 2, 0], "#a4d9ce", [0, 0, 0], "greenhouse");
     for (let column = 0; column <= 4; column++) {
       const x = (column / 4 - 0.5) * width;
@@ -268,6 +271,7 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
       for (const z of [-depth / 2, 0, depth / 2]) b.box([0.045, height, 0.045], [side * width / 2, base + height / 2, z], "#eceddd");
       b.box([0.045, 0.045, depth], [side * width / 2, base + height * 0.55, 0], "#eceddd");
     }
+    for (let floor = 1; floor < floors; floor++) b.box([width + 0.06, 0.045, depth + 0.06], [0, base + floor * floorHeight, 0], "#f1ead7");
     b.add("roof", [0, base + height + 0.3, 0], [width + 0.08, 0.6, depth + 0.08], "#bce4d9", [0, 0, 0], "greenhouse");
     entrance(b, width, depth, stage);
     if (stage > 0) for (const side of [-1, 1]) {
@@ -278,6 +282,7 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
       const roofDepth = depth + 0.08, tilt = Math.atan2(0.6, roofDepth / 2);
       solarPanel(b, [width * 0.16, base + height + 0.18 + 0.04 * Math.cos(tilt), roofDepth * 0.35 + 0.04 * Math.sin(tilt)], width * 0.2, Math.hypot(0.6, roofDepth / 2) * 0.36, tilt);
     }
+    addMoss(b, width, depth, base + height + 0.6, moss, seed);
     return b.parts;
   }
 
@@ -305,7 +310,7 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
     if (variant === "solar-house" || !BUILDING_CATALOG.some(entry => entry.id === variant)) {
       const roofHeight = 0.48, roofDepth = depth + 0.16;
       b.box([width + 0.13, 0.065, depth + 0.13], [0, roofY, 0], "#eee7d2");
-      b.add("roof", [0, roofY + roofHeight / 2, 0], [width + 0.16, roofHeight, roofDepth], "#438e76");
+      b.add("gable", [0, roofY + roofHeight / 2, 0], [width + 0.16, roofHeight, roofDepth], "#765842");
       if (stage > 0) for (const side of [-1, 1]) {
         const tilt = Math.atan2(roofHeight, roofDepth / 2);
         solarPanel(b, [side * width * 0.16, roofY + roofHeight * 0.3 + 0.04 * Math.cos(tilt), roofDepth * 0.35 + 0.04 * Math.sin(tilt)], width * 0.2, Math.hypot(roofHeight, roofDepth / 2) * 0.36, tilt);
@@ -339,7 +344,17 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
     }
   }
   entrance(b, width, depth, stage);
+  addMoss(b, width, depth, roofY + (variant === "solar-house" ? 0.5 : 0.16), moss, seed);
   return b.parts;
+}
+
+function addMoss(b: Builder, width: number, depth: number, y: number, amount: number, seed: number) {
+  const patches = Math.min(5, Math.ceil(clamp01(amount) * 5));
+  for (let patch = 0; patch < patches; patch++) {
+    const x = ((patch * 37 + seed) % 7 - 3) * width / 8;
+    const z = ((patch * 19 + seed) % 7 - 3) * depth / 8;
+    b.foliage([x, y + 0.07, z], 0.12 + (patch % 2) * 0.035, patch % 2 ? "#6d9d69" : "#82ae70");
+  }
 }
 
 function buildPlant(species: string, seed: number): Model {
@@ -405,9 +420,9 @@ function cached(key: string, build: () => Model) {
   return model;
 }
 
-export function buildingModel(variant: string, width: number, depth: number, stage: number, seed: number): Model {
+export function buildingModel(variant: string, width: number, depth: number, stage: number, seed: number, floors?: number, moss = 0): Model {
   const variation = seed % 12;
-  return cached(`building:${variant}:${width}:${depth}:${stage}:${variation}`, () => buildBuilding(variant, width, depth, stage, variation));
+  return cached(`building:${variant}:${width}:${depth}:${stage}:${variation}:${floors}:${moss}`, () => buildBuilding(variant, width, depth, stage, variation, floors, moss));
 }
 
 export function plantModel(species: string, seed: number): Model {
@@ -454,6 +469,21 @@ export function findFreePlot(buildings: readonly Plot[], plants: readonly Plot[]
       }
       if (free) return { x, z };
     }
+  }
+  return null;
+}
+
+export function findFreePlantSite(occupied: readonly Plot[], random: () => number = Math.random) {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const x = random() * GRID_SIZE, z = random() * GRID_SIZE;
+    const blocked = occupied.some(item => {
+      const width = item.footprint?.width ?? 0.5;
+      const depth = item.footprint?.depth ?? 0.5;
+      const dx = Math.max(item.gridPosition.x - x, 0, x - (item.gridPosition.x + width));
+      const dz = Math.max(item.gridPosition.z - z, 0, z - (item.gridPosition.z + depth));
+      return Math.hypot(dx, dz) < (item.footprint ? 0.55 : 0.85);
+    });
+    if (!blocked) return { x, z };
   }
   return null;
 }

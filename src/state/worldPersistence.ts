@@ -1,4 +1,5 @@
-import { DEFAULT_WORLD_STATE } from "../simulation/worldDefaults";
+import { DEFAULT_WORLD_STATE, getCityDayKey } from "../simulation/worldDefaults";
+import { MAX_BUILDING_FLOORS } from "../edenModels";
 import type { ActivityCategory, Building, Plant, Resident, WorldState } from "../simulation/types";
 import { useWorldStore } from "./worldStore";
 
@@ -35,6 +36,12 @@ function normalizeWorld(input: unknown): WorldState | null {
       id: typeof building.id === "string" ? building.id : `building-${index + 1}`,
       name: typeof building.name === "string" ? building.name : "Solar Workshop",
       variantId: typeof building.variantId === "string" ? building.variantId : "solar-workshop",
+      floors: typeof building.floors === "number" && Number.isFinite(building.floors)
+        ? Math.max(1, Math.min(MAX_BUILDING_FLOORS, Math.floor(building.floors)))
+        : undefined,
+      moss: typeof building.moss === "number" && Number.isFinite(building.moss)
+        ? Math.max(0, Math.min(1, building.moss))
+        : 0,
     };
   }) as Building[];
   const plants = source.plants.map((value, index) => {
@@ -57,26 +64,16 @@ function normalizeWorld(input: unknown): WorldState | null {
     };
   }) as Resident[];
 
-  const seed =
-    isRecord(source.seed) && typeof source.seed.seed === "number"
-      ? source.seed.seed
-      : DEFAULT_WORLD_STATE.seed.seed;
   const grid = isRecord(source.grid) ? source.grid : {};
   const weather = isRecord(source.weather) ? source.weather : DEFAULT_WORLD_STATE.weather;
   const progression = isRecord(source.progression) ? source.progression : {};
   return {
-    seed: { seed },
-    grid: { ...DEFAULT_WORLD_STATE.grid, ...grid, width: 6, depth: 6 } as WorldState["grid"],
+    grid: { ...DEFAULT_WORLD_STATE.grid, ...grid, width: 20, depth: 20, cellSize: 1.5 } as WorldState["grid"],
     buildings,
     plants,
     residents,
     weather: {
-      condition:
-        weather.condition === "cloudy" ||
-        weather.condition === "rainy" ||
-        weather.condition === "stormy"
-          ? weather.condition
-          : "sunny",
+      condition: weather.condition === "cloudy" || weather.condition === "rainy" ? weather.condition : "sunny",
       updatedAt: typeof weather.updatedAt === "number" ? weather.updatedAt : Date.now(),
     },
     simulationTime: typeof source.simulationTime === "number" ? source.simulationTime : 0,
@@ -107,7 +104,18 @@ function normalizeWorld(input: unknown): WorldState | null {
       unlockedBuildings: Array.isArray(progression.unlockedBuildings)
         ? progression.unlockedBuildings.filter((item): item is string => typeof item === "string")
         : [],
+      consumedMilestones: isRecord(progression.consumedMilestones)
+        ? {
+            productivity: typeof progression.consumedMilestones.productivity === "number" ? Math.max(0, Math.floor(progression.consumedMilestones.productivity)) : 0,
+            leisure: typeof progression.consumedMilestones.leisure === "number" ? Math.max(0, Math.floor(progression.consumedMilestones.leisure)) : 0,
+            idle: typeof progression.consumedMilestones.idle === "number" ? Math.max(0, Math.floor(progression.consumedMilestones.idle)) : 0,
+          }
+        : { productivity: 0, leisure: 0, idle: 0 },
     },
+    cityDayKey: typeof source.cityDayKey === "string"
+      ? source.cityDayKey
+      : getCityDayKey(new Date(typeof source.lastActiveAt === "number" ? source.lastActiveAt : Date.now())),
+    cycleStartedAt: typeof source.cycleStartedAt === "number" ? source.cycleStartedAt : Date.now(),
   };
 }
 
@@ -123,7 +131,8 @@ export async function initializeWorldPersistence(): Promise<void> {
         typeof savedValue === "string" ? (JSON.parse(savedValue) as unknown) : savedValue;
       const world = normalizeWorld(parsed);
       if (!world) throw new Error("Saved world has an unsupported format.");
-      useWorldStore.getState().loadWorld(world);
+      if (world.cityDayKey !== getCityDayKey()) useWorldStore.getState().resetWorld();
+      else useWorldStore.getState().loadWorld(world);
     }
   } catch (error) {
     console.error("Failed to load saved world:", error);

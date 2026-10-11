@@ -3,7 +3,6 @@ const {
   BrowserWindow,
   screen,
   ipcMain,
-  powerMonitor,
 } = require("electron");
 
 const path = require("node:path");
@@ -192,6 +191,7 @@ function startHoverMonitoring() {
 
 function createTitlebarWindow() {
   titlebarWindow = new BrowserWindow({
+    parent: mainWindow,
     width: 500,
     height: BAR_HEIGHT,
     show: false,
@@ -214,6 +214,7 @@ function createTitlebarWindow() {
   titlebarWindow.loadFile(
     path.join(__dirname, "titlebar.html"),
   );
+  titlebarWindow.setAlwaysOnTop(true);
 
   titlebarWindow.webContents.on("did-finish-load", () => {
     titlebarWindow.webContents.send(
@@ -259,10 +260,12 @@ function createWindow() {
     },
   });
 
-  mainWindow.setAspectRatio(width / height);
 
   mainWindow.on("move", syncTitlebarPosition);
   mainWindow.on("resize", syncTitlebarPosition);
+  mainWindow.on("show", () => {
+    syncTitlebarPosition();
+  });
 
   mainWindow.on("hide", () => {
     titlebarWindow?.hide();
