@@ -1,3 +1,4 @@
+import TerrariumSky from "./TerrariumSky";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
@@ -21,6 +22,7 @@ import {
 } from "./edenModels";
 import type { Batch, BuildingVariant, Part, Shape } from "./edenModels";
 import "./App.css";
+import FastForwardControls from "./FastForwardControls";
 
 // Unit geometries are shared by every instance, including every plant leaf.
 // Their lifetime is the renderer module's lifetime; individual batches own only
@@ -302,8 +304,93 @@ function BuildingsLayer({ night }: { night: boolean }) {
       const stage = growthStage(progress);
       const model = buildingModel(item.variantId, width, depth, stage, hashId(item.id), item.floors, item.moss);
       // Horizontal size stays fixed so growth cannot consume neighboring plots.
-      const root = compose([at.x, 0, at.z], [0, item.rotation, 0], [1, 0.8 + progress * 0.2, 1]);
+      const buildingVariation = 0.75 + (hashId(item.id) % 100) / 100 * 0.8;
+    const root = compose(
+      [at.x, 0, at.z],
+      [0, item.rotation, 0],
+      [1, (0.65 + progress * 0.35) * buildingVariation, 1]
+    );
       placeModel(model, root, parts);
+
+      // Climbing vines and leaves appear as moss increases.
+      const moss = Math.max(0, Math.min(1, item.moss ?? 0));
+
+      if (moss > 0.05) {
+        const height = (item.floors ?? 1) * 0.55 + 0.5;
+        const vineCount = Math.ceil(moss * 12);
+
+        for (let i = 0; i < vineCount; i++) {
+          const side = i % 4;
+          const fraction = ((i * 7) % 11) / 11 - 0.5;
+
+          const localX =
+            side < 2
+              ? fraction * width * 0.85
+              : (side === 2 ? -1 : 1) * width * 0.46;
+
+          const localZ =
+            side < 2
+              ? (side === 0 ? -1 : 1) * depth * 0.46
+              : fraction * depth * 0.85;
+
+          const angle = item.rotation;
+
+          const x =
+            at.x +
+            localX * Math.cos(angle) +
+            localZ * Math.sin(angle);
+
+          const z =
+            at.z -
+            localX * Math.sin(angle) +
+            localZ * Math.cos(angle);
+
+          const vineHeight =
+            height * moss * (0.5 + (i % 4) * 0.12);
+
+          parts.push({
+            shape: "stem",
+            finish: "matte",
+            color: i % 3 === 0 ? "#397b3c" : "#4d9b4a",
+            matrix: compose(
+              [x, vineHeight / 2, z],
+              [0, 0, 0],
+              [
+                0.035 + moss * 0.035,
+                vineHeight,
+                0.035 + moss * 0.035,
+              ]
+            ),
+          });
+
+          const leafCount = Math.ceil(moss * 6);
+
+          for (let j = 0; j < leafCount; j++) {
+            const leafY =
+              ((j + 1) / (leafCount + 1)) * vineHeight;
+
+            parts.push({
+              shape: "leaf",
+              finish: "matte",
+              color: j % 2 === 0 ? "#56a94c" : "#7bc768",
+              matrix: compose(
+                [
+                  x + (j % 2 === 0 ? -0.06 : 0.06),
+                  leafY,
+                  z,
+                ],
+                [0, 0, j % 2 === 0 ? -0.5 : 0.5],
+                [
+                  0.09 + moss * 0.06,
+                  0.045 + moss * 0.035,
+                  0.065,
+                ]
+              ),
+            });
+          }
+        }
+      }
+
     }
     return batchParts(parts);
   }, [buildings, now]);
@@ -319,7 +406,23 @@ function PlantsLayer({ night }: { night: boolean }) {
       const at = cellPoint(item.gridPosition.x, item.gridPosition.z);
       const seed = hashId(item.id);
       const speciesScale = item.species === "tree" ? 2.2 : item.species === "shrub" ? 1.6 : 1.35;
-      const scale = (0.3 + clamp01(item.growth) * 0.7) * (0.9 + seed % 11 * 0.02) * CELL_SIZE / 1.5 * speciesScale;
+      const growth = Math.max(0, Math.min(3, item.growth));
+
+    const natureMultiplier =
+      item.species === "tree" ? 1.65 :
+      item.species === "shrub" ? 1.4 :
+      item.species === "fern" ? 1.35 :
+      item.species === "flower" ? 1.5 :
+      1.25;
+
+    const individualSize = 0.7 + (seed % 100) / 100 * 0.9;
+
+    const scale =
+      (0.25 + growth * 0.65) *
+      individualSize *
+      (CELL_SIZE / 1.5) *
+      speciesScale *
+      natureMultiplier;
       const root = compose([at.x, 0, at.z], [0, seed % 360 * Math.PI / 180, 0], [scale, scale, scale]);
       placeModel(plantModel(item.species, seed), root, parts);
     }
@@ -547,6 +650,7 @@ function App() {
         dpr={DPR_RANGE}
         gl={GL_OPTIONS}
       >
+        <TerrariumSky />
         <World showGrid={showGrid} shadows={shadows} />
       </Canvas>
       <div style={panelOpen ? PANEL_STYLE : { ...PANEL_STYLE, width: "auto", padding: 7 }}>
@@ -567,6 +671,7 @@ function App() {
             {["tree", "shrub", "fern", "flower", "grass"].map(type => <option key={type} value={type}>{type}</option>)}
           </select>
           <button type="button" onClick={handleAddPlant} style={CONTROL_STYLE}>Add plant</button>
+          <FastForwardControls />
           <label><input type="checkbox" checked={showGrid} onChange={event => setShowGrid(event.target.checked)} /> Show grid</label>
           <label><input type="checkbox" checked={shadows} onChange={event => setShadows(event.target.checked)} /> Shadows</label>
           <button type="button" style={CONTROL_STYLE} onClick={() => {
