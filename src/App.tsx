@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import {
@@ -11,6 +11,7 @@ import {
 } from "./state/worldStore";
 import type { Building, Plant, Resident } from "./simulation/types";
 import "./App.css";
+import * as THREE from "three";
 
 const BOARD_SIZE = 9;
 const GRID_SIZE = 6;
@@ -840,6 +841,153 @@ function ResidentMesh({ item }: { item: Resident }) {
   );
 }
 
+const ISLAND_RADIUS = 6.4;
+
+function CircularTerrain({ night }: { night: boolean }) {
+  return (
+    <group>
+      {/* Circular ground */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.04, 0]}
+        receiveShadow
+      >
+        <circleGeometry args={[ISLAND_RADIUS, 96]} />
+        <meshStandardMaterial
+          color={night ? "#24545a" : "#72b6a0"}
+          roughness={0.92}
+        />
+      </mesh>
+
+      {/* Floating island thickness */}
+      <mesh position={[0, -0.3, 0]} receiveShadow castShadow>
+        <cylinderGeometry args={[ISLAND_RADIUS, ISLAND_RADIUS - 0.25, 0.5, 96]} />
+        <meshStandardMaterial
+          color={night ? "#183e43" : "#527e69"}
+          roughness={0.95}
+        />
+      </mesh>
+
+      {/* Decorative outer rim */}
+      <mesh position={[0, -0.02, 0]}>
+        <torusGeometry args={[ISLAND_RADIUS, 0.045, 8, 96]} />
+        <meshStandardMaterial
+          color="#a3d8c3"
+          metalness={0.25}
+          roughness={0.4}
+        />
+      </mesh>
+    </group>
+  );
+}
+function GlassDome() {
+  const radius = ISLAND_RADIUS + 0.25;
+  const height = 7;
+
+  const domeGeometry = useMemo(() => {
+    const points: THREE.Vector2[] = [];
+
+    const segments = 64;
+
+    for (let i = 0; i <= segments; i++) {
+      const r = (i / segments) * radius;
+
+      // Paraboloid equation
+      const y = height * (1 - (r * r) / (radius * radius));
+
+      points.push(new THREE.Vector2(r, y));
+    }
+
+    return new THREE.LatheGeometry(points, 128);
+  }, [radius, height]);
+
+  useEffect(() => {
+    return () => domeGeometry.dispose();
+  }, [domeGeometry]);
+
+  return (
+    <group>
+      {/* Full 3D transparent glass enclosure */}
+      <mesh geometry={domeGeometry}>
+        <meshPhysicalMaterial
+          color="#c5f3ff"
+          transparent
+          opacity={0.2}
+          roughness={0.04}
+          metalness={0}
+          transmission={0}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Circular structural ring at the bottom */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[radius, 0.055, 12, 128]} />
+        <meshStandardMaterial
+          color="#a6e7ed"
+          metalness={0.55}
+          roughness={0.2}
+        />
+      </mesh>
+
+      {/* Horizontal reinforcement rings following dome curvature */}
+      {[0.3, 0.6, 0.85].map((fraction) => {
+        const r = radius * fraction;
+        const y = height * (1 - fraction * fraction);
+
+        return (
+          <mesh
+            key={fraction}
+            position={[0, y, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <torusGeometry args={[r, 0.018, 8, 128]} />
+            <meshStandardMaterial
+              color="#b5f0f4"
+              transparent
+              opacity={0.5}
+              metalness={0.4}
+              roughness={0.2}
+            />
+          </mesh>
+        );
+      })}
+
+      {/* Curved vertical ribs from top to base */}
+      {Array.from({ length: 12 }, (_, index) => {
+        const angle = (index / 12) * Math.PI * 2;
+
+        const curvePoints = Array.from({ length: 65 }, (_, i) => {
+          const r = (i / 64) * radius;
+          const y = height * (1 - (r * r) / (radius * radius));
+
+          return new THREE.Vector3(
+            r * Math.cos(angle),
+            y,
+            r * Math.sin(angle)
+          );
+        });
+
+        const curve = new THREE.CatmullRomCurve3(curvePoints);
+
+        return (
+          <mesh key={index}>
+            <tubeGeometry args={[curve, 64, 0.018, 6, false]} />
+            <meshStandardMaterial
+              color="#a6e7ed"
+              transparent
+              opacity={0.45}
+              metalness={0.5}
+              roughness={0.2}
+            />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
 function World() {
   const buildings = useWorldStore(selectBuildings);
   const plants = useWorldStore(selectPlants);
@@ -875,29 +1023,9 @@ function World() {
         castShadow
       />
 
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.04, 0]}
-        receiveShadow
-      >
-        <planeGeometry
-          args={[BOARD_SIZE, BOARD_SIZE]}
-        />
-        <meshStandardMaterial
-          color={night ? "#24545a" : "#72b6a0"}
-          roughness={0.92}
-        />
-      </mesh>
+      <CircularTerrain night={night} />
 
-      <gridHelper
-        args={[
-          BOARD_SIZE,
-          GRID_SIZE,
-          night ? "#5e9c96" : "#b4e2cc",
-          night ? "#376c6d" : "#8bc8ae",
-        ]}
-        position={[0, -0.025, 0]}
-      />
+  
 
       {buildings.map((item) => (
         <BuildingMesh
@@ -919,11 +1047,12 @@ function World() {
           item={item}
         />
       ))}
+      <GlassDome />
 
       <OrbitControls
         enablePan={false}
-        minDistance={7}
-        maxDistance={16}
+        minDistance={10}
+        maxDistance={30}
         maxPolarAngle={Math.PI / 2.15}
       />
     </>
@@ -1103,8 +1232,8 @@ function App() {
       <Canvas
         shadows
         camera={{
-          position: [8, 8, 10],
-          fov: 34,
+          position: [15, 13, 18],
+          fov: 45,
         }}
         dpr={[1, 1.5]}
       >
