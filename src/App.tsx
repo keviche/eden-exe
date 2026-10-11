@@ -1,6 +1,5 @@
 import TerrariumSky from "./TerrariumSky";
 import SkyBubbles from "./SkyBubbles";
-import TerrariumSky from "./TerrariumSky";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
