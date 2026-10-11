@@ -3,8 +3,8 @@ import type { CSSProperties } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import {
-  BoxGeometry, BufferGeometry, CapsuleGeometry, Color, ConeGeometry, CylinderGeometry,
-  Float32BufferAttribute, IcosahedronGeometry, Matrix4, SphereGeometry,
+  BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, Color, ConeGeometry, CylinderGeometry,
+  ExtrudeGeometry, Float32BufferAttribute, IcosahedronGeometry, Matrix4, Shape as ThreeShape, ShapeGeometry, SphereGeometry, TubeGeometry, Vector3,
 } from "three";
 import type { InstancedMesh } from "three";
 import {
@@ -54,24 +54,104 @@ function createGableGeometry() {
   return geometry;
 }
 
-const CAMERA_POSITION: [number, number, number] = [BOARD_SIZE * 0.92, BOARD_SIZE * 0.82, BOARD_SIZE * 1.18];
-const CAMERA_OPTIONS = { position: CAMERA_POSITION, fov: 38, near: 0.1, far: BOARD_SIZE * 8 };
+const TANK_WIDTH = BOARD_SIZE + 2.2;
+const TANK_HEIGHT = BOARD_SIZE * 0.63;
+const TANK_RADIUS = 2.4;
+// The thick soil bed raises the miniature landscape into the enclosure instead
+// of leaving a large unused aquarium-like headspace above a floor-level city.
+const TERRAIN_LIFT = 4;
+// A near-front three-quarter view matches the reference's display-tank framing:
+// the long front pane reads clearly, while enough of the right side remains visible.
+const CAMERA_POSITION: [number, number, number] = [BOARD_SIZE * 0.78, BOARD_SIZE * 1.08, BOARD_SIZE * 1.95];
+const CAMERA_OPTIONS = { position: CAMERA_POSITION, fov: 34, near: 0.1, far: BOARD_SIZE * 8 };
 const DPR_RANGE: [number, number] = [1, 1.25];
 const GL_OPTIONS = { antialias: true, powerPreference: "low-power" as const };
-const ORBIT_TARGET: [number, number, number] = [0, 0, 0];
+const ORBIT_TARGET: [number, number, number] = [0, TANK_HEIGHT * 0.36, 0];
+const createRendererId = (type: string) => `${type}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 
-function PathRibbon() {
+function roundedPerimeter(halfWidth: number, halfDepth: number, radius: number, y: number) {
+  const points: Vector3[] = [];
+  const corners = [
+    { x: halfWidth - radius, z: -halfDepth + radius, from: -90 },
+    { x: halfWidth - radius, z: halfDepth - radius, from: 0 },
+    { x: -halfWidth + radius, z: halfDepth - radius, from: 90 },
+    { x: -halfWidth + radius, z: -halfDepth + radius, from: 180 },
+  ];
+  for (const corner of corners) for (let step = 0; step <= 10; step++) {
+    const angle = (corner.from + step * 9) * Math.PI / 180;
+    points.push(new Vector3(corner.x + Math.cos(angle) * radius, y, corner.z + Math.sin(angle) * radius));
+  }
+  return points;
+}
+
+function createTankWallGeometry() {
+  const outline = roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, 0);
+  const positions: number[] = [], indices: number[] = [];
+  for (const point of outline) positions.push(point.x, 0.04, point.z, point.x, TANK_HEIGHT, point.z);
+  for (let index = 0; index < outline.length; index++) {
+    const next = (index + 1) % outline.length;
+    const bottom = index * 2, top = bottom + 1, nextBottom = next * 2, nextTop = nextBottom + 1;
+    indices.push(bottom, nextBottom, nextTop, bottom, nextTop, top);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createRoundedGroundShape() {
+  const half = BOARD_SIZE / 2;
+  const radius = 2.1;
+  const shape = new ThreeShape();
+  shape.moveTo(-half + radius, -half);
+  shape.lineTo(half - radius, -half); shape.quadraticCurveTo(half, -half, half, -half + radius);
+  shape.lineTo(half, half - radius); shape.quadraticCurveTo(half, half, half - radius, half);
+  shape.lineTo(-half + radius, half); shape.quadraticCurveTo(-half, half, -half, half - radius);
+  shape.lineTo(-half, -half + radius); shape.quadraticCurveTo(-half, -half, -half + radius, -half);
+  return shape;
+}
+const GROUND_GEOMETRY = new ShapeGeometry(createRoundedGroundShape(), 8).rotateX(-Math.PI / 2);
+const SOIL_GEOMETRY = new ExtrudeGeometry(createRoundedGroundShape(), { depth: TERRAIN_LIFT - 0.25, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.1, bevelThickness: 0.08, steps: 1 }).rotateX(-Math.PI / 2);
+
+function TankEnclosure({ night }: { night: boolean }) {
+  const wall = useMemo(() => createTankWallGeometry(), []);
+  const rim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, TANK_HEIGHT), true, "centripetal"), 120, 0.075, 8, true), []);
+  const innerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2 - 0.14, TANK_WIDTH / 2 - 0.14, TANK_RADIUS - 0.12, TANK_HEIGHT - 0.035), true, "centripetal"), 120, 0.035, 8, true), []);
+  const lowerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, 0.08), true, "centripetal"), 120, 0.045, 8, true), []);
+  const frontGlints = useMemo(() => [-1, 1].map(side => new TubeGeometry(new CatmullRomCurve3([
+    new Vector3(side * (TANK_WIDTH / 2 - TANK_RADIUS), 0.25, TANK_WIDTH / 2),
+    new Vector3(side * (TANK_WIDTH / 2 - TANK_RADIUS), TANK_HEIGHT - 0.18, TANK_WIDTH / 2),
+  ], false), 24, 0.035, 6, false)), []);
+  const glintPoints = useMemo(() => {
+    const outline = roundedPerimeter(TANK_WIDTH / 2 + 0.005, TANK_WIDTH / 2 + 0.005, TANK_RADIUS, 0);
+    return [outline.slice(0, 10), outline.slice(22, 32)].map(points => new TubeGeometry(new CatmullRomCurve3(points, false, "centripetal"), 32, 0.035, 6, false));
+  }, []);
+  return <group>
+    <mesh geometry={wall} renderOrder={4}>
+      <meshPhysicalMaterial color={night ? "#8aeafa" : "#b5f5fb"} transparent opacity={night ? 0.2 : 0.18} roughness={0.08} metalness={0} transmission={0.1} thickness={0.24} ior={1.33} side={2} depthWrite={false} />
+    </mesh>
+    <mesh geometry={rim} renderOrder={6}><meshStandardMaterial color="#ecffff" roughness={0.12} metalness={0.05} emissive="#75f2ff" emissiveIntensity={night ? 0.34 : 0.18} /></mesh>
+    <mesh geometry={innerRim} renderOrder={6}><meshStandardMaterial color="#bdffff" roughness={0.08} metalness={0.06} emissive="#5adff0" emissiveIntensity={0.16} /></mesh>
+    <mesh geometry={lowerRim} renderOrder={6}><meshStandardMaterial color="#a6f7ff" roughness={0.16} metalness={0.08} emissive="#41d9ee" emissiveIntensity={0.18} /></mesh>
+    {glintPoints.map((geometry, index) => <mesh key={index} geometry={geometry} renderOrder={7}><meshBasicMaterial color="#ffffff" transparent opacity={0.68} /></mesh>)}
+    {frontGlints.map((geometry, index) => <mesh key={`front-${index}`} geometry={geometry} renderOrder={7}><meshBasicMaterial color="#f3ffff" transparent opacity={0.44} /></mesh>)}
+  </group>;
+}
+
+function WaterCourse() {
   const geometry = useMemo(() => {
     const positions: number[] = [];
-    const halfWidth = 0.62;
-    const steps = 96;
+    const halfWidth = 0.58;
+    const steps = 88;
     for (let step = 0; step < steps; step++) {
-      const z0 = -BOARD_SIZE / 2 + step / steps * BOARD_SIZE;
-      const z1 = -BOARD_SIZE / 2 + (step + 1) / steps * BOARD_SIZE;
-      const x0 = Math.sin(z0 / BOARD_SIZE * Math.PI * 2.2) * BOARD_SIZE * 0.14;
-      const x1 = Math.sin(z1 / BOARD_SIZE * Math.PI * 2.2) * BOARD_SIZE * 0.14;
-      const a = [x0 - halfWidth, 0.032, z0], b = [x0 + halfWidth, 0.032, z0];
-      const c = [x1 + halfWidth, 0.032, z1], d = [x1 - halfWidth, 0.032, z1];
+      const t0 = step / steps, t1 = (step + 1) / steps;
+      const z0 = -BOARD_SIZE * 0.48 + t0 * BOARD_SIZE * 0.71;
+      const z1 = -BOARD_SIZE * 0.48 + t1 * BOARD_SIZE * 0.71;
+      const x0 = -4 + 10 * t0 + Math.sin(t0 * Math.PI * 2) * 2;
+      const x1 = -4 + 10 * t1 + Math.sin(t1 * Math.PI * 2) * 2;
+      const a = [x0 - halfWidth, 0.065, z0], b = [x0 + halfWidth, 0.065, z0];
+      const c = [x1 + halfWidth, 0.065, z1], d = [x1 - halfWidth, 0.065, z1];
       positions.push(...a, ...c, ...b, ...a, ...d, ...c);
     }
     const result = new BufferGeometry();
@@ -79,7 +159,46 @@ function PathRibbon() {
     result.computeVertexNormals();
     return result;
   }, []);
-  return <mesh geometry={geometry} receiveShadow><meshStandardMaterial color="#d5c8a9" roughness={0.96} /></mesh>;
+  return <group>
+    <mesh geometry={geometry} receiveShadow><meshPhysicalMaterial color="#21cce2" roughness={0.11} metalness={0.06} clearcoat={1} clearcoatRoughness={0.08} emissive="#19a9bd" emissiveIntensity={0.1} /></mesh>
+    <mesh position={[6, 0.073, BOARD_SIZE * 0.29]} scale={[3.3, 0.075, 1.85]} receiveShadow><sphereGeometry args={[1, 32, 16]} /><meshPhysicalMaterial color="#35d8e8" roughness={0.08} metalness={0.08} clearcoat={1} emissive="#10a8bd" emissiveIntensity={0.12} /></mesh>
+    {[0, 1, 2].map(index => <mesh key={index} position={[6, 0.153 + index * 0.002, BOARD_SIZE * 0.29]} scale={[2.25 + index * 0.35, 1.12 + index * 0.22, 1]} rotation={[-Math.PI / 2, 0, index * 0.35]}><ringGeometry args={[0.91, 1, 64]} /><meshBasicMaterial color={index === 1 ? "#d6ffff" : "#76f4ff"} transparent opacity={0.48} side={2} /></mesh>)}
+  </group>;
+}
+
+function MossBanks({ night }: { night: boolean }) {
+  const ref = useRef<InstancedMesh>(null);
+  const invalidate = useThree(state => state.invalidate);
+  const geometry = useMemo(() => new SphereGeometry(1, 12, 8), []);
+  const patches = useMemo(() => Array.from({ length: 176 }, (_, index) => {
+    const angle = index / 136 * Math.PI * 2;
+    const cosine = Math.cos(angle), sine = Math.sin(angle);
+    const edge = (BOARD_SIZE * (0.41 + ((index * 17) % 10) / 100)) / Math.max(Math.abs(cosine), Math.abs(sine));
+    if (index >= 136) {
+      const waterAngle = (index - 136) / 40 * Math.PI * 2;
+      return { x: 6 + Math.cos(waterAngle) * (3.7 + (index % 3) * 0.16), z: BOARD_SIZE * 0.29 + Math.sin(waterAngle) * (2.15 + (index % 4) * 0.13), sx: 0.62 + index % 3 * 0.12, sz: 0.57 + index % 4 * 0.1, color: index % 2 };
+    }
+    return { x: cosine * edge, z: sine * edge, sx: 0.74 + (index * 7 % 9) * 0.105, sz: 0.72 + (index * 5 % 8) * 0.11, color: index % 4 };
+  }), []);
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const matrix = new Matrix4();
+    const colors = ["#47b85b", "#55c564", "#68ce69", "#3da857"];
+    patches.forEach((patch, index) => {
+      matrix.makeScale(patch.sx, 0.13 + index % 3 * 0.018, patch.sz).setPosition(patch.x, 0.075, patch.z);
+      mesh.setMatrixAt(index, matrix);
+      mesh.setColorAt(index, new Color(colors[patch.color]!));
+    });
+    mesh.count = patches.length;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    invalidate();
+  }, [patches, invalidate]);
+  return <instancedMesh ref={ref} args={[geometry, undefined, patches.length]} receiveShadow>
+    <meshStandardMaterial color={night ? "#c0e4c9" : "#ffffff"} roughness={0.88} />
+  </instancedMesh>;
 }
 const PANEL_STYLE: CSSProperties = {
   position: "absolute", top: 12, left: 12, zIndex: 10,
@@ -131,16 +250,18 @@ const InstanceBatch = memo(function InstanceBatch({ batch, night }: { batch: Bat
       castShadow
       receiveShadow
     >
-      <meshStandardMaterial
+      <meshPhysicalMaterial
         color="#ffffff"
         transparent={glass || greenhouse}
         opacity={glass ? 0.4 : greenhouse ? 0.18 : 1}
         depthWrite={!glass && !greenhouse}
         side={2}
-        roughness={glass || greenhouse ? 0.2 : solar ? 0.27 : metal ? 0.4 : 0.88}
-        metalness={glass || greenhouse ? 0.08 : solar ? 0.25 : metal ? 0.4 : 0}
-        emissive={glass ? "#ffe7ae" : greenhouse ? "#66b89a" : "#000000"}
-        emissiveIntensity={glass ? (night ? 0.6 : 0.1) : greenhouse ? (night ? 0.08 : 0.025) : 0}
+        roughness={glass || greenhouse ? 0.12 : solar ? 0.2 : metal ? 0.32 : 0.78}
+        metalness={glass || greenhouse ? 0.04 : solar ? 0.3 : metal ? 0.36 : 0}
+        emissive={glass ? "#fff0ab" : greenhouse ? "#8af5df" : "#000000"}
+        emissiveIntensity={glass ? (night ? 0.58 : 0.16) : greenhouse ? (night ? 0.12 : 0.045) : 0}
+        clearcoat={glass || greenhouse ? 0.7 : solar ? 0.9 : 0.12}
+        clearcoatRoughness={glass || greenhouse ? 0.06 : solar ? 0.12 : 0.32}
         flatShading={!glass && !greenhouse && !metal}
       />
     </instancedMesh>
@@ -197,7 +318,8 @@ function PlantsLayer({ night }: { night: boolean }) {
     for (const item of plants) {
       const at = cellPoint(item.gridPosition.x, item.gridPosition.z);
       const seed = hashId(item.id);
-      const scale = (0.3 + clamp01(item.growth) * 0.7) * (0.9 + seed % 11 * 0.02) * CELL_SIZE / 1.5;
+      const speciesScale = item.species === "tree" ? 2.2 : item.species === "shrub" ? 1.6 : 1.35;
+      const scale = (0.3 + clamp01(item.growth) * 0.7) * (0.9 + seed % 11 * 0.02) * CELL_SIZE / 1.5 * speciesScale;
       const root = compose([at.x, 0, at.z], [0, seed % 360 * Math.PI / 180, 0], [scale, scale, scale]);
       placeModel(plantModel(item.species, seed), root, parts);
     }
@@ -230,17 +352,18 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
   const weather = useWorldStore(state => state.world.weather);
   const simulationTime = useWorldStore(state => state.world.simulationTime);
   const phase = getDayPhase(simulationTime);
-  const sky = weather.condition === "rainy" ? (night ? "#263c4a" : "#789a9e") : weather.condition === "cloudy" ? (night ? "#263f4a" : "#a7c8c2") : phase === "sunset" ? "#e8ae96" : (night ? "#102b36" : "#a9d9d5");
+  const sky = weather.condition === "rainy" ? (night ? "#263c4a" : "#d7e5dc") : weather.condition === "cloudy" ? (night ? "#263f4a" : "#d3e9e7") : phase === "sunset" ? "#ffd6a2" : (night ? "#102b36" : "#bceaf1");
   return (
     <>
       <color attach="background" args={[sky]} />
       {/* Start beyond the map at the default view; avoids washing out buildings. */}
       <fog attach="fog" args={[sky, BOARD_SIZE * 3.5, BOARD_SIZE * 6]} />
-      <ambientLight intensity={weather.condition === "rainy" ? 0.48 : weather.condition === "cloudy" ? 0.7 : night ? 0.7 : 0.9} color={night ? "#83b5dc" : "#fff2cf"} />
+      <hemisphereLight args={[night ? "#82d6ff" : "#f5ffff", night ? "#184b55" : "#63c579", night ? 0.7 : 0.82]} />
+      <ambientLight intensity={weather.condition === "rainy" ? 0.58 : weather.condition === "cloudy" ? 0.82 : night ? 0.7 : 1.02} color={night ? "#83b5dc" : "#eaffff"} />
       <directionalLight
         position={[-BOARD_SIZE * 0.6, BOARD_SIZE, BOARD_SIZE * 0.6]}
-        intensity={weather.condition === "rainy" ? 0.55 : weather.condition === "cloudy" ? 1 : phase === "sunset" ? 1.35 : night ? 0.65 : 2}
-        color={night ? "#9bc7ff" : phase === "sunset" ? "#ffd0a5" : "#fff4d1"}
+        intensity={weather.condition === "rainy" ? 0.72 : weather.condition === "cloudy" ? 1.25 : phase === "sunset" ? 1.55 : night ? 0.65 : 2.25}
+        color={night ? "#9bc7ff" : phase === "sunset" ? "#ffe0b5" : "#ffffff"}
         castShadow={shadows}
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -252,36 +375,17 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
         shadow-camera-far={BOARD_SIZE * 4}
         shadow-normalBias={0.03}
       />
-      <mesh position={[0, -0.23, 0]} receiveShadow castShadow>
-        <boxGeometry args={[BOARD_SIZE + 0.12, 0.46, BOARD_SIZE + 0.12]} />
-        <meshStandardMaterial color={night ? "#45392e" : "#594734"} roughness={1} />
+      <group position={[0, TERRAIN_LIFT, 0]}>
+      <mesh position={[0, -TERRAIN_LIFT + 0.12, 0]} receiveShadow castShadow geometry={SOIL_GEOMETRY}>
+        <meshStandardMaterial color={night ? "#4a3429" : "#573722"} roughness={0.96} />
       </mesh>
-      <mesh position={[0, 0.005, 0]} receiveShadow>
-        <boxGeometry args={[BOARD_SIZE, 0.035, BOARD_SIZE]} />
-        <meshStandardMaterial color={night ? "#47765b" : "#6d9b5a"} roughness={1} />
+      <mesh position={[0, 0.004, 0]} receiveShadow geometry={GROUND_GEOMETRY}>
+        <meshStandardMaterial color={night ? "#299a6c" : "#3ca959"} roughness={0.76} />
       </mesh>
-      <PathRibbon />
+      <MossBanks night={night} />
+      <WaterCourse />
       {showGrid && <gridHelper args={[BOARD_SIZE, GRID_SIZE, night ? "#5e9c96" : "#b4e2cc", night ? "#376c6d" : "#8bc8ae"]} position={[0, 0.04, 0]} />}
-      <mesh position={[0, BOARD_SIZE * 0.31, -BOARD_SIZE / 2]}>
-        <boxGeometry args={[BOARD_SIZE + 0.16, BOARD_SIZE * 0.62, 0.045]} />
-        <meshPhysicalMaterial color="#b6f4f2" transparent opacity={0.075} roughness={0.12} metalness={0.08} depthWrite={false} side={2} />
-      </mesh>
-      <mesh position={[0, BOARD_SIZE * 0.31, BOARD_SIZE / 2]}>
-        <boxGeometry args={[BOARD_SIZE + 0.16, BOARD_SIZE * 0.62, 0.045]} />
-        <meshPhysicalMaterial color="#b6f4f2" transparent opacity={0.055} roughness={0.12} metalness={0.08} depthWrite={false} side={2} />
-      </mesh>
-      <mesh position={[-BOARD_SIZE / 2, BOARD_SIZE * 0.31, 0]}>
-        <boxGeometry args={[0.045, BOARD_SIZE * 0.62, BOARD_SIZE + 0.16]} />
-        <meshPhysicalMaterial color="#b6f4f2" transparent opacity={0.06} roughness={0.12} metalness={0.08} depthWrite={false} side={2} />
-      </mesh>
-      <mesh position={[BOARD_SIZE / 2, BOARD_SIZE * 0.31, 0]}>
-        <boxGeometry args={[0.045, BOARD_SIZE * 0.62, BOARD_SIZE + 0.16]} />
-        <meshPhysicalMaterial color="#b6f4f2" transparent opacity={0.06} roughness={0.12} metalness={0.08} depthWrite={false} side={2} />
-      </mesh>
-      <mesh position={[0, BOARD_SIZE * 0.62, 0]}>
-        <boxGeometry args={[BOARD_SIZE + 0.16, 0.045, BOARD_SIZE + 0.16]} />
-        <meshPhysicalMaterial color="#b6f4f2" transparent opacity={0.035} roughness={0.12} metalness={0.08} depthWrite={false} side={2} />
-      </mesh>
+      <TankEnclosure night={night} />
       {weather.condition === "cloudy" && Array.from({ length: 5 }, (_, index) => (
         <group key={`cloud-${index}`} position={[(index - 2) * BOARD_SIZE * 0.13, BOARD_SIZE * (0.34 + index % 2 * 0.035), ((index * 7) % 5 - 2) * BOARD_SIZE * 0.12]}>
           <mesh><sphereGeometry args={[BOARD_SIZE * 0.055, 8, 6]} /><meshBasicMaterial color="#f5fffb" transparent opacity={0.2} depthWrite={false} /></mesh>
@@ -298,6 +402,7 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
       <BuildingsLayer night={night} />
       <PlantsLayer night={night} />
       <ResidentsLayer night={night} />
+      </group>
       <OrbitControls
         enablePan
         minDistance={CELL_SIZE * 4}
@@ -370,7 +475,7 @@ function App() {
     const plot = findFreePlot([...selectBuildings(state), ...residents], selectPlants(state), config.width, config.depth);
     if (!plot) { setNotice(`No empty ${config.width}×${config.depth} plot remains.`); return; }
     const item: Building = {
-      type: "building", id: crypto.randomUUID(), variantId: config.id, name: config.name,
+      type: "building", id: createRendererId("building"), variantId: config.id, name: config.name,
       gridPosition: plot, footprint: { width: config.width, depth: config.depth },
       rotation: 0, createdAt: Date.now(),
     };
@@ -388,7 +493,7 @@ function App() {
     const residents = residentOccupiedPlots(selectResidents(state));
     const position = findFreePlantSite([...selectBuildings(state), ...selectPlants(state), ...residents]);
     if (!position) { setNotice("No suitable planting space remains."); return; }
-    addPlant({ type: "plant", id: crypto.randomUUID(), species: plantType, variantId: plantType, gridPosition: position, growth: 0.9, createdAt: Date.now() });
+    addPlant({ type: "plant", id: createRendererId("plant"), species: plantType, variantId: plantType, gridPosition: position, growth: 0.9, createdAt: Date.now() });
     setNotice(`${plantType} added.`);
   }
 
