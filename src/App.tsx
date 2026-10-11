@@ -89,55 +89,161 @@ function roundedPerimeter(halfWidth: number, halfDepth: number, radius: number, 
   return points;
 }
 
+// Matching rounded corners for soil and glass.
+// The glass bends smoothly underneath the terrarium.
+const BASE_CURVE_RADIUS = 0.7;
+const SOIL_CLEARANCE = 0.32;
+
+function tankInsetAtHeight(height: number) {
+  const h = Math.max(
+    0,
+    Math.min(BASE_CURVE_RADIUS, height)
+  );
+  const dy = BASE_CURVE_RADIUS - h;
+
+  return BASE_CURVE_RADIUS - Math.sqrt(
+    Math.max(0, BASE_CURVE_RADIUS ** 2 - dy ** 2)
+  );
+}
+
 function createTankWallGeometry() {
-  const outline = roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, 0);
-  const positions: number[] = [], indices: number[] = [];
-  for (const point of outline) positions.push(point.x, 0.04, point.z, point.x, TANK_HEIGHT, point.z);
-  for (let index = 0; index < outline.length; index++) {
-    const next = (index + 1) % outline.length;
-    const bottom = index * 2, top = bottom + 1, nextBottom = next * 2, nextTop = nextBottom + 1;
-    indices.push(bottom, nextBottom, nextTop, bottom, nextTop, top);
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const contours: Vector3[][] = [];
+  const bottomY = -TERRAIN_LIFT;
+
+  // Generate a quarter-circle transition between the
+  // horizontal glass floor and the vertical glass walls.
+  for (let step = 0; step <= 16; step++) {
+    const angle = step / 16 * Math.PI / 2;
+
+    const height =
+      BASE_CURVE_RADIUS * (1 - Math.cos(angle));
+
+    const inset =
+      BASE_CURVE_RADIUS * (1 - Math.sin(angle));
+
+    contours.push(
+      roundedPerimeter(
+        TANK_WIDTH / 2 - inset,
+        TANK_WIDTH / 2 - inset,
+        TANK_RADIUS - inset,
+        bottomY + height
+      )
+    );
   }
+
+  // Continue vertically to the open top.
+  contours.push(
+    roundedPerimeter(
+      TANK_WIDTH / 2,
+      TANK_WIDTH / 2,
+      TANK_RADIUS,
+      TANK_HEIGHT
+    )
+  );
+
+  const count = contours[0]!.length;
+
+  for (const outline of contours) {
+    if (outline.length !== count) {
+      throw new Error("Inconsistent tank outline");
+    }
+
+    for (const point of outline) {
+      positions.push(point.x, point.y, point.z);
+    }
+  }
+
+  // Join neighboring contours into a continuous surface.
+  for (let level = 0; level < contours.length - 1; level++) {
+    for (let i = 0; i < count; i++) {
+      const next = (i + 1) % count;
+
+      const a = level * count + i;
+      const b = level * count + next;
+      const c = (level + 1) * count + i;
+      const d = (level + 1) * count + next;
+
+      indices.push(a, c, d, a, d, b);
+    }
+  }
+
+  // Close the underside with transparent glass.
+  // This also prevents an open hole when viewed from below.
+  const center = positions.length / 3;
+  positions.push(0, bottomY, 0);
+
+  for (let i = 0; i < count; i++) {
+    indices.push(center, i, (i + 1) % count);
+  }
+
   const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+
+  geometry.setAttribute(
+    "position",
+    new Float32BufferAttribute(positions, 3)
+  );
+
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
   return geometry;
 }
 
 function createRoundedGroundShape() {
-  const half = BOARD_SIZE / 2;
-  const radius = 2.1;
+  // The soil shares the exact corner centers of the glass.
+  // A small inset ensures the dirt never protrudes outside.
+  const half = TANK_WIDTH / 2 - SOIL_CLEARANCE;
+  const radius = TANK_RADIUS - SOIL_CLEARANCE;
+
   const shape = new ThreeShape();
+
   shape.moveTo(-half + radius, -half);
-  shape.lineTo(half - radius, -half); shape.quadraticCurveTo(half, -half, half, -half + radius);
-  shape.lineTo(half, half - radius); shape.quadraticCurveTo(half, half, half - radius, half);
-  shape.lineTo(-half + radius, half); shape.quadraticCurveTo(-half, half, -half, half - radius);
-  shape.lineTo(-half, -half + radius); shape.quadraticCurveTo(-half, -half, -half + radius, -half);
+
+  shape.lineTo(half - radius, -half);
+  shape.quadraticCurveTo(
+    half, -half, half, -half + radius
+  );
+
+  shape.lineTo(half, half - radius);
+  shape.quadraticCurveTo(
+    half, half, half - radius, half
+  );
+
+  shape.lineTo(-half + radius, half);
+  shape.quadraticCurveTo(
+    -half, half, -half, half - radius
+  );
+
+  shape.lineTo(-half, -half + radius);
+  shape.quadraticCurveTo(
+    -half, -half, -half + radius, -half
+  );
+
   return shape;
 }
-const SOIL_GEOMETRY = new ExtrudeGeometry(createRoundedGroundShape(), { depth: TERRAIN_LIFT - 0.25, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.1, bevelThickness: 0.08, steps: 1 }).rotateX(-Math.PI / 2).scale((TANK_WIDTH - 0.35) / BOARD_SIZE, 1, (TANK_WIDTH - 0.35) / BOARD_SIZE);
+
+// The soil sits above the glass floor while remaining
+// close to the glass walls and below the grass surface.
+const SOIL_GEOMETRY = new ExtrudeGeometry(
+  createRoundedGroundShape(),
+  {
+    depth: TERRAIN_LIFT - 0.46,
+    bevelEnabled: true,
+    bevelSegments: 4,
+    bevelSize: 0.08,
+    bevelThickness: 0.08,
+    steps: 1,
+  }
+).rotateX(-Math.PI / 2);
 
 function TankEnclosure({ night }: { night: boolean }) {
-  const wall = useMemo(() => {
-    const geometry = createTankWallGeometry();
-    const positions = geometry.getAttribute('position');
-    for (let i = 0; i < positions.count; i++) {
-      const y = positions.getY(i);
-      const normalized = y / TANK_HEIGHT;
-      positions.setY(
-        i,
-        -TERRAIN_LIFT + normalized * (TANK_HEIGHT + TERRAIN_LIFT)
-      );
-    }
-    positions.needsUpdate = true;
-    geometry.computeVertexNormals();
-    geometry.computeBoundingSphere();
-    return geometry;
-  }, []);
+  const wall = useMemo(() => createTankWallGeometry(), []);
   const rim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, TANK_HEIGHT), true, "centripetal"), 120, 0.075, 8, true), []);
   const innerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2 - 0.14, TANK_WIDTH / 2 - 0.14, TANK_RADIUS - 0.12, TANK_HEIGHT - 0.035), true, "centripetal"), 120, 0.035, 8, true), []);
-  const lowerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, -TERRAIN_LIFT + 0.08), true, "centripetal"), 120, 0.045, 8, true), []);
+  const lowerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2 - tankInsetAtHeight(0.08), TANK_WIDTH / 2 - tankInsetAtHeight(0.08), TANK_RADIUS - tankInsetAtHeight(0.08), -TERRAIN_LIFT + 0.08), true, "centripetal"), 120, 0.045, 8, true), []);
   const frontGlints = useMemo(() => [-1, 1].map(side => new TubeGeometry(new CatmullRomCurve3([
     new Vector3(side * (TANK_WIDTH / 2 - TANK_RADIUS), 0.25, TANK_WIDTH / 2),
     new Vector3(side * (TANK_WIDTH / 2 - TANK_RADIUS), TANK_HEIGHT - 0.18, TANK_WIDTH / 2),
@@ -641,7 +747,7 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
         shadow-normalBias={0.03}
       />
       <group position={[0, TERRAIN_LIFT, 0]}>
-      <mesh position={[0, -TERRAIN_LIFT + 0.12, 0]} receiveShadow castShadow geometry={SOIL_GEOMETRY}>
+      <mesh position={[0, -TERRAIN_LIFT + 0.38, 0]} receiveShadow castShadow geometry={SOIL_GEOMETRY}>
         <meshStandardMaterial color={night ? "#4a3429" : "#573722"} roughness={0.96} />
       </mesh>
       <MossBanks night={night} />

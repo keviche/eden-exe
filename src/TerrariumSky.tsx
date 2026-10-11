@@ -56,7 +56,7 @@ export default function TerrariumSky() {
   return (
     <group position={[0, 0, 0]}>
       {/* Rainbow positioned behind the city */}
-      <group position={[0, 4.5, -13]}>
+      <group position={[0, 2.08, -13]}>
         <RainbowBand radius={12} color="#ff6b6b" opacity={0.65} />
         <RainbowBand radius={11.7} color="#ffb56b" opacity={0.65} />
         <RainbowBand radius={11.4} color="#ffe66d" opacity={0.65} />
