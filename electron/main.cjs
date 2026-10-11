@@ -3,8 +3,9 @@ const {
   BrowserWindow,
   screen,
   ipcMain,
-  powerMonitor,
 } = require("electron");
+
+const { createActivityMonitor } = require("./activityMonitor.cjs");
 
 const path = require("node:path");
 const fs = require("node:fs/promises");
@@ -22,7 +23,7 @@ let currentPlacement = "above";
 let quitting = false;
 
 // --------------------------------------------------
-// Existing world persistence
+// World persistence
 // --------------------------------------------------
 
 function getWorldSavePath() {
@@ -58,8 +59,55 @@ ipcMain.handle("world:save", async (_event, world) => {
 });
 
 // --------------------------------------------------
+// Activity monitoring and IPC
+// --------------------------------------------------
+
+// Stores the latest system-wide activity status.
+// Example:
+// {
+//   status: "active",
+//   idleSeconds: 0,
+//   timestamp: 1720000000000
+// }
+
+let latestActivity = null;
+
+// Receives activity changes from activityMonitor.cjs.
+const activityMonitor = createActivityMonitor((activity) => {
+  latestActivity = activity;
+
+  console.log("[EDEN Activity]", activity);
+
+  // Send the updated activity to the React renderer.
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isDestroyed()
+  ) {
+    mainWindow.webContents.send(
+      "activity:changed",
+      activity,
+    );
+  }
+});
+
+// Allows React to request the current activity status
+// when the window first loads or reloads.
+ipcMain.handle("activity:get-current", (event) => {
+  if (
+    !mainWindow ||
+    event.sender !== mainWindow.webContents
+  ) {
+    return null;
+  }
+
+  return latestActivity;
+});
+
+// --------------------------------------------------
 // Title bar positioning
 // --------------------------------------------------
+
 function getTitlebarBounds() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return null;
@@ -94,6 +142,7 @@ function syncTitlebarPosition() {
 
   if (currentPlacement !== result.placement) {
     currentPlacement = result.placement;
+
     titlebarWindow.webContents.send(
       "titlebar:placement",
       currentPlacement,
@@ -171,7 +220,10 @@ function startHoverMonitoring() {
           titlebarWindow.showInactive();
         }
       }
-    } else if (titlebarWindow.isVisible() && !hideTimer) {
+    } else if (
+      titlebarWindow.isVisible() &&
+      !hideTimer
+    ) {
       hideTimer = setTimeout(() => {
         hideTimer = null;
 
@@ -204,7 +256,10 @@ function createTitlebarWindow() {
     skipTaskbar: true,
 
     webPreferences: {
-      preload: path.join(__dirname, "titlebar-preload.cjs"),
+      preload: path.join(
+        __dirname,
+        "titlebar-preload.cjs",
+      ),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -215,12 +270,15 @@ function createTitlebarWindow() {
     path.join(__dirname, "titlebar.html"),
   );
 
-  titlebarWindow.webContents.on("did-finish-load", () => {
-    titlebarWindow.webContents.send(
-      "titlebar:placement",
-      currentPlacement,
-    );
-  });
+  titlebarWindow.webContents.on(
+    "did-finish-load",
+    () => {
+      titlebarWindow.webContents.send(
+        "titlebar:placement",
+        currentPlacement,
+      );
+    },
+  );
 
   titlebarWindow.on("closed", () => {
     titlebarWindow = null;
@@ -252,7 +310,10 @@ function createWindow() {
     hasShadow: false,
 
     webPreferences: {
-      preload: path.join(__dirname, "preload.cjs"),
+      preload: path.join(
+        __dirname,
+        "preload.cjs",
+      ),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -279,6 +340,7 @@ function createWindow() {
   mainWindow.on("close", (event) => {
     if (!quitting) {
       event.preventDefault();
+
       mainWindow.hide();
       titlebarWindow?.hide();
     }
@@ -293,7 +355,9 @@ function createWindow() {
       path.join(__dirname, "../dist/index.html"),
     );
   } else {
-    mainWindow.loadURL("http://127.0.0.1:5173");
+    mainWindow.loadURL(
+      "http://127.0.0.1:5173",
+    );
   }
 
   createTitlebarWindow();
@@ -305,25 +369,45 @@ function createWindow() {
 // --------------------------------------------------
 
 ipcMain.on("titlebar:close", (event) => {
-  if (event.sender !== titlebarWindow?.webContents) return;
+  if (
+    event.sender !== titlebarWindow?.webContents
+  ) {
+    return;
+  }
 
   mainWindow?.hide();
   titlebarWindow?.hide();
 });
 
 ipcMain.on("titlebar:minimize", (event) => {
-  if (event.sender !== titlebarWindow?.webContents) return;
+  if (
+    event.sender !== titlebarWindow?.webContents
+  ) {
+    return;
+  }
 
   mainWindow?.minimize();
   titlebarWindow?.hide();
 });
 
 ipcMain.on("titlebar:fullscreen", (event) => {
-  if (event.sender !== titlebarWindow?.webContents) return;
+  if (
+    event.sender !== titlebarWindow?.webContents
+  ) {
+    return;
+  }
 
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed()
+  ) {
+    return;
+  }
 
-  mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  mainWindow.setFullScreen(
+    !mainWindow.isFullScreen(),
+  );
+
   titlebarWindow?.hide();
 });
 
@@ -334,8 +418,14 @@ ipcMain.on("titlebar:fullscreen", (event) => {
 app.whenReady().then(() => {
   createWindow();
 
+  // Begin monitoring system-wide activity.
+  activityMonitor.start();
+
   app.on("activate", () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (
+      mainWindow &&
+      !mainWindow.isDestroyed()
+    ) {
       mainWindow.show();
     } else {
       createWindow();
@@ -345,7 +435,11 @@ app.whenReady().then(() => {
 
 app.on("before-quit", () => {
   quitting = true;
+
   stopHoverMonitoring();
+
+  // Stop the activity polling interval.
+  activityMonitor.stop();
 });
 
 app.on("window-all-closed", () => {

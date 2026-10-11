@@ -931,6 +931,41 @@ function World() {
 }
 
 function App() {
+    const setSystemIdle = useWorldStore(
+    (state) => state.setSystemIdle
+  );
+
+  useEffect(() => {
+    const api = window.edenAPI;
+
+    if (!api) return;
+
+    let mounted = true;
+    let latestTimestamp = -Infinity;
+
+    const handleActivity = (activity: {
+      status: "active" | "idle";
+      timestamp: number;
+    }) => {
+      if (!mounted || activity.timestamp < latestTimestamp) return;
+
+      latestTimestamp = activity.timestamp;
+      setSystemIdle(activity.status === "idle");
+    };
+
+    const unsubscribe = api.onActivityChanged(handleActivity);
+
+    api.getCurrentActivity()
+      .then((activity) => {
+        if (activity) handleActivity(activity);
+      })
+      .catch(console.error);
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [setSystemIdle]);
   // Simulation state
   const advanceTime = useWorldStore(
     (state) => state.advanceTime
@@ -958,6 +993,7 @@ function App() {
   );
 
   // Simulation timer and activity tracking
+    // Simulation timer and activity tracking
   useEffect(() => {
     let previous = Date.now();
 
@@ -973,22 +1009,22 @@ function App() {
       if (
         event instanceof KeyboardEvent &&
         event.altKey &&
-        ["1", "2", "3"].includes(event.key)
+        ["1", "2"].includes(event.key)
       ) {
         event.preventDefault();
 
         setActivityCategory(
-          event.key === "1"
-            ? "productivity"
-            : event.key === "2"
-              ? "leisure"
-              : "idle"
+          event.key === "1" ? "productivity" : "leisure"
         );
 
         return;
       }
 
-      recordInput();
+      // Only track window input when running in a browser.
+      // Electron already tracks activity across the entire Mac.
+      if (!window.edenAPI) {
+        recordInput();
+      }
     };
 
     window.addEventListener("pointerdown", onInput);
@@ -1002,7 +1038,7 @@ function App() {
       window.removeEventListener("wheel", onInput);
     };
   }, [advanceTime, recordInput, setActivityCategory]);
-
+  
   // Find the first available 2x2 space
   function handleAddBuilding() {
     for (
