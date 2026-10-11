@@ -5,6 +5,10 @@ import { BUILDING_CATALOG, findFreePlot, findFreePlantSite, GRID_SIZE, MAX_BUILD
 import { findOpenResidentCell, findResidentPath, residentGridPosition, residentOccupiedPlots, residentWorldPosition } from "../simulation/navigation";
 
 export const ACTIVITY_MILESTONE_POINTS = 5;
+export const MAX_NATURE_GROWTH = 3;
+export const NATURE_GROWTH_PER_POINT = 0.12;
+export const MOSS_GROWTH_PER_POINT = 0.035;
+
 export const MAX_BUILDINGS = 80;
 export const MAX_PLANTS = 180;
 export const MAX_RESIDENTS = 40;
@@ -77,7 +81,49 @@ function createPlant(world: WorldState, at: number): Plant | null {
   const position = findFreePlantSite([...world.buildings, ...world.plants, ...residents]);
   if (!position) return null;
   const species = (["tree", "shrub", "fern", "flower", "grass"] as const)[Math.floor(Math.random() * 5)]!;
-  return { type: "plant", id: createId("plant"), species, variantId: species, gridPosition: position, growth: 0.7 + Math.random() * 0.3, createdAt: at };
+  return { type: "plant", id: createId("plant"), species, variantId: species, gridPosition: position, growth: 0.2 + Math.random() * 0.35, createdAt: at };
+}
+
+
+const EDEN_GROWTH_MAX = 3;
+
+function edenRandom(id: string, salt = 0): number {
+  let hash = 2166136261 ^ salt;
+  for (let i = 0; i < id.length; i++) {
+    hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+function growEden(world: WorldState, points: number): WorldState {
+  if (points <= 0) return world;
+
+  return {
+    ...world,
+    buildings: world.buildings.map(building => {
+      const speed = 0.65 + edenRandom(building.id, 7) * 0.7;
+      return {
+        ...building,
+        moss: Math.min(
+          1,
+          (building.moss ?? 0) + points * 0.025 * speed
+        ),
+      };
+    }),
+    plants: world.plants.map(plant => {
+      const speed = 0.65 + edenRandom(plant.id, 13) * 0.7;
+      const maxGrowth =
+        1.4 + edenRandom(plant.id, 29) * 1.6;
+
+      return {
+        ...plant,
+        growth: Math.min(
+          Math.min(EDEN_GROWTH_MAX, maxGrowth),
+          plant.growth + points * 0.075 * speed
+        ),
+      };
+    }),
+  };
 }
 
 function applyMilestones(worldInput: WorldState, at: number): WorldState {
@@ -99,12 +145,83 @@ function applyMilestones(worldInput: WorldState, at: number): WorldState {
           if (building) { world = { ...world, buildings: [...world.buildings, building] }; changed = true; }
         }
       } else if (category === "leisure") {
-        const plant = createPlant(world, at);
-        if (plant) { world = { ...world, plants: [...world.plants, plant] }; changed = true; }
-        if (earned >= 3 && world.buildings.some(building => (building.moss ?? 0) < 1)) {
-          world = { ...world, buildings: world.buildings.map(building => ({ ...building, moss: Math.min(1, Math.max(building.moss ?? 0, (earned - 2) / 4)) })) };
+        const buildingCount = world.buildings.length;
+        const treeCount = world.plants.filter(
+          plant => plant.species === "tree"
+        ).length;
+
+        // Roughly 1 tree per building, with some variation.
+        const maxTrees = Math.max(
+          1,
+          Math.ceil(buildingCount * 1.2)
+        );
+
+        // Limit total nature so buildings remain visually prominent.
+        const maxNature = Math.max(
+          2,
+          Math.ceil(buildingCount * 1.8)
+        );
+
+        if (world.plants.length < maxNature) {
+          let plant = createPlant(world, at);
+
+          if (plant) {
+            if (
+              plant.species === "tree" &&
+              treeCount >= maxTrees
+            ) {
+              const alternatives = [
+                "shrub",
+                "fern",
+                "flower",
+                "grass",
+              ] as const;
+
+              const species =
+                alternatives[
+                  Math.floor(Math.random() * alternatives.length)
+                ]!;
+
+              plant = {
+                ...plant,
+                species,
+                variantId: species,
+              };
+            }
+
+            world = {
+              ...world,
+              plants: [...world.plants, plant],
+            };
+
+            changed = true;
+          }
+        }
+
+        // Existing buildings continue developing moss and vines.
+        if (
+          earned >= 3 &&
+          world.buildings.some(
+            building => (building.moss ?? 0) < 1
+          )
+        ) {
+          world = {
+            ...world,
+            buildings: world.buildings.map(building => ({
+              ...building,
+              moss: Math.min(
+                1,
+                Math.max(
+                  building.moss ?? 0,
+                  (earned - 2) / 4
+                )
+              ),
+            })),
+          };
+
           changed = true;
         }
+
       } else if (world.residents.length < MAX_RESIDENTS) {
         const cell = findOpenResidentCell(world.buildings, world.plants, world.residents.map(resident => resident.position));
         if (!cell) break;
@@ -316,7 +433,21 @@ export const useWorldStore = create<WorldStore>((set) => ({
 
   addActivityPoints: (category, points) => {
     if (!Number.isFinite(points) || points <= 0) return;
-    set(state => ({ world: applyMilestones({ ...state.world, activity: { ...state.world.activity, [ACTIVITY_KEY[category]]: state.world.activity[ACTIVITY_KEY[category]] + points } }, Date.now()) }));
+
+    set(state => {
+      let world = applyMilestones({
+        ...state.world,
+        activity: {
+          ...state.world.activity,
+          [ACTIVITY_KEY[category]]:
+            state.world.activity[ACTIVITY_KEY[category]] + points,
+        },
+      }, Date.now());
+
+      world = growEden(world, points);
+
+      return { world };
+    });
   },
 
   // --------------------------------------------------
@@ -392,7 +523,9 @@ export const useWorldStore = create<WorldStore>((set) => ({
         }) };
       }
 
-      return { world: applyMilestones(world, at) };
+      world = growEden(applyMilestones(world, at), seconds / 60);
+
+      return { world };
     });
   },
 
