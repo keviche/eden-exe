@@ -285,16 +285,222 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
   const wallColor = colors[seed % colors.length]!;
 
   if (variant === "garden-pavilion") {
-    const y = 1.1;
-    for (const x of [-1, 1]) for (const z of [-1, 1]) {
-      b.add("cylinder", [x * width * 0.38, base + y / 2, z * depth * 0.38], [0.055, y, 0.055], "#d2b28c");
+    const y = 1.18;
+    const roofY = base + y + 0.27;
+    const px = width * 0.36;
+    const pz = depth * 0.36;
+
+    // Stage 1: Open-air pearl-white garden pavilion.
+    b.box(
+      [width * 0.84, 0.12, depth * 0.84],
+      [0, base + 0.06, 0],
+      "#e8f7f4"
+    );
+
+    b.box(
+      [width * 0.78, 0.035, depth * 0.78],
+      [0, base + 0.135, 0],
+      "#9cddd3",
+      [0, 0, 0],
+      "metal"
+    );
+
+    for (const x of [-1, 1]) {
+      for (const z of [-1, 1]) {
+        b.add(
+          "cylinder",
+          [x * px, base + y / 2, z * pz],
+          [0.065, y, 0.065],
+          "#f0f8f4",
+          [0, 0, 0],
+          "metal"
+        );
+
+        b.add(
+          "sphere",
+          [x * px, base + y, z * pz],
+          [0.09, 0.065, 0.09],
+          "#66d9d5",
+          [0, 0, 0],
+          "glass"
+        );
+      }
     }
-    b.add("roof", [0, base + y + 0.27, 0], [width + 0.12, 0.54, depth + 0.12], "#548d74");
-    b.box([width * 0.7, 0.09, 0.22], [0, 0.4, -depth * 0.3], "#ba936e");
-    for (const side of [-1, 1]) b.box([0.06, 0.32, 0.15], [side * width * 0.25, 0.2, -depth * 0.3], "#ba936e");
-    if (stage > 0) planter(b, [0, base, 0], 0.26);
-    if (stage === 2) for (const side of [-1, 1]) planter(b, [side * width * 0.3, base, depth * 0.3], 0.19);
-    addMoss(b, width, depth, base + y + 0.54, moss, seed);
+
+    b.add(
+      "roof",
+      [0, roofY, 0],
+      [width + 0.08, 0.54, depth + 0.08],
+      "#d9f4ec"
+    );
+
+    // Distinct aqua roof trim.
+    for (const side of [-1, 1]) {
+      b.box(
+        [width * 0.92, 0.055, 0.055],
+        [0, roofY - 0.15, side * depth * 0.42],
+        "#58cfc8",
+        [0, 0, 0],
+        "metal"
+      );
+    }
+
+    // Two symmetrical garden benches.
+    for (const side of [-1, 1]) {
+      b.box(
+        [width * 0.27, 0.075, 0.22],
+        [side * width * 0.19, base + 0.34, -depth * 0.2],
+        "#c6e9df"
+      );
+
+      for (const leg of [-1, 1]) {
+        b.box(
+          [0.045, 0.22, 0.045],
+          [side * width * 0.19 + leg * width * 0.1,
+           base + 0.21,
+           -depth * 0.2],
+          "#77bcb2",
+          [0, 0, 0],
+          "metal"
+        );
+      }
+    }
+
+    if (stage >= 1) {
+      // Stage 2: Cyan glass railings and decorative lighting.
+      for (const side of [-1, 1]) {
+        b.box(
+          [0.045, 0.37, depth * 0.49],
+          [side * width * 0.35, base + 0.37, 0],
+          "#8eece7",
+          [0, 0, 0],
+          "glass"
+        );
+
+        b.box(
+          [0.06, 0.045, depth * 0.51],
+          [side * width * 0.35, base + 0.57, 0],
+          "#f4fffa",
+          [0, 0, 0],
+          "metal"
+        );
+
+        planter(
+          b,
+          [side * width * 0.27, base + 0.14, depth * 0.24],
+          0.18
+        );
+
+        // Hanging aqua pendant lights.
+        b.stem(
+          [side * width * 0.2, roofY - 0.16, 0],
+          [side * width * 0.2, roofY - 0.38, 0],
+          0.012,
+          "#b7ddd6"
+        );
+
+        b.add(
+          "sphere",
+          [side * width * 0.2, roofY - 0.42, 0],
+          [0.095, 0.095, 0.095],
+          "#9cfaff",
+          [0, 0, 0],
+          "glass"
+        );
+      }
+
+      // Small central fountain-like feature.
+      b.add(
+        "cylinder",
+        [0, base + 0.2, depth * 0.12],
+        [0.22, 0.12, 0.22],
+        "#dff9f4"
+      );
+
+      b.add(
+        "cylinder",
+        [0, base + 0.275, depth * 0.12],
+        [0.17, 0.025, 0.17],
+        "#55d9dd",
+        [0, 0, 0],
+        "glass"
+      );
+    }
+
+    if (stage >= 2) {
+      // Stage 3: Advanced rooftop garden and floating canopy.
+      const canopyY = roofY + 0.43;
+
+      for (const side of [-1, 1]) {
+        b.add(
+          "cylinder",
+          [side * width * 0.26, roofY + 0.17, 0],
+          [0.035, 0.36, 0.035],
+          "#e7f9f6",
+          [0, 0, 0],
+          "metal"
+        );
+
+        b.box(
+          [width * 0.29, 0.065, depth * 0.49],
+          [side * width * 0.25, canopyY, 0],
+          "#8fece7",
+          [0, 0, 0],
+          "glass"
+        );
+
+        b.box(
+          [width * 0.27, 0.025, depth * 0.44],
+          [side * width * 0.25, canopyY + 0.05, 0],
+          "#f4fffa",
+          [0, 0, 0],
+          "metal"
+        );
+
+        planter(
+          b,
+          [side * width * 0.25, roofY + 0.16, depth * 0.18],
+          0.16
+        );
+
+        // Hanging greenery below the canopy.
+        for (const z of [-1, 1]) {
+          b.stem(
+            [side * width * 0.25, canopyY - 0.05, z * depth * 0.15],
+            [side * width * 0.25, canopyY - 0.23, z * depth * 0.15],
+            0.012,
+            "#4da878"
+          );
+
+          b.foliage(
+            [side * width * 0.25, canopyY - 0.22, z * depth * 0.15],
+            0.095,
+            "#6cda9c"
+          );
+        }
+      }
+
+      // Signature pearl-and-aqua rooftop ornament.
+      b.add(
+        "cylinder",
+        [0, roofY + 0.22, 0],
+        [0.1, 0.35, 0.1],
+        "#f4fffa",
+        [0, 0, 0],
+        "metal"
+      );
+
+      b.add(
+        "sphere",
+        [0, roofY + 0.48, 0],
+        [0.19, 0.19, 0.19],
+        "#7ce9ef",
+        [0, 0, 0],
+        "glass"
+      );
+    }
+
+    addMoss(b, width, depth, roofY + 0.27, moss, seed);
     return b.parts;
   }
 
