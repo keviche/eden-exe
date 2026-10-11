@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'"
+    />
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      .titlebar {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 12px;
+        background: rgba(225, 242, 234, 0.95);
+        -webkit-app-region: drag;
+      }
+
+      .titlebar.above {
+        border-radius: 10px 10px 0 0;
+      }
+
+      .titlebar.below {
+        border-radius: 0 0 10px 10px;
+      }
+
+      .controls {
+        display: flex;
+        gap: 8px;
+        -webkit-app-region: no-drag;
+      }
+
+      .control {
+        width: 13px;
+        height: 13px;
+        padding: 0;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      .close {
+        background: #ff5f57;
+      }
+
+      .minimize {
+        background: #febc2e;
+      }
+
+      .fullscreen {
+        background: #28c840;
+      }
+
+      .control:hover {
+        filter: brightness(0.9);
+      }
+
+      .title {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: #42675a;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="titlebar" class="titlebar above">
+      <div class="controls">
+        <button id="close" class="control close" title="Close" aria-label="Close"></button>
+        <button id="minimize" class="control minimize" title="Minimize" aria-label="Minimize"></button>
+        <button id="fullscreen" class="control fullscreen" title="Fullscreen" aria-label="Fullscreen"></button>
+      </div>
+
+      <span class="title">EDEN.EXE</span>
+    </div>
+
+    <script src="./titlebar.js"></script>
+  </body>
+</html>
