@@ -244,6 +244,11 @@ function startHoverMonitoring() {
 
 function createTitlebarWindow() {
   titlebarWindow = new BrowserWindow({
+    transparent: true,
+backgroundColor: "#00000000",
+frame: false,
+hasShadow: false,
+resizable: false,
     parent: mainWindow,
     width: 500,
     height: BAR_HEIGHT,

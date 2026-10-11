@@ -56,3 +56,21 @@
 .status i.leisure {
   background: #f3ca8e;
 }
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent !important;
+}
+
+body {
+  overflow: hidden;
+}
+
+.app,
+.app canvas {
+  background: transparent !important;
+}
