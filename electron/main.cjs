@@ -369,6 +369,69 @@ function createWindow() {
 }
 
 // --------------------------------------------------
+
+// --------------------------------------------------
+// Move the main window when dragging the toolbar.
+// --------------------------------------------------
+
+let toolbarDrag = null;
+let toolbarDragTimer = null;
+
+function stopToolbarDrag() {
+  if (toolbarDragTimer) {
+    clearInterval(toolbarDragTimer);
+    toolbarDragTimer = null;
+  }
+  toolbarDrag = null;
+}
+
+ipcMain.on("titlebar:drag-start", (event) => {
+  if (
+    event.sender !== titlebarWindow?.webContents ||
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    mainWindow.isFullScreen()
+  ) return;
+
+  stopToolbarDrag();
+
+  const cursor = screen.getCursorScreenPoint();
+  const bounds = mainWindow.getBounds();
+
+  toolbarDrag = {
+    offsetX: cursor.x - bounds.x,
+    offsetY: cursor.y - bounds.y,
+  };
+
+  toolbarDragTimer = setInterval(() => {
+    if (
+      !toolbarDrag ||
+      !mainWindow ||
+      mainWindow.isDestroyed()
+    ) {
+      stopToolbarDrag();
+      return;
+    }
+
+    const point = screen.getCursorScreenPoint();
+
+    const x = Math.round(point.x - toolbarDrag.offsetX);
+    const y = Math.round(point.y - toolbarDrag.offsetY);
+
+    const [currentX, currentY] = mainWindow.getPosition();
+
+    if (x !== currentX || y !== currentY) {
+      mainWindow.setPosition(x, y);
+      syncTitlebarPosition();
+    }
+  }, 16);
+});
+
+ipcMain.on("titlebar:drag-end", (event) => {
+  if (event.sender !== titlebarWindow?.webContents) return;
+  stopToolbarDrag();
+});
+
 // Title bar button actions
 // --------------------------------------------------
 

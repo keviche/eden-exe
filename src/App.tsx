@@ -1,4 +1,6 @@
 import TerrariumSky from "./TerrariumSky";
+import SkyBubbles from "./SkyBubbles";
+import TerrariumSky from "./TerrariumSky";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
@@ -577,6 +579,7 @@ useEffect(() => {
   const [variant, setVariant] = useState<BuildingVariant>("solar-house");
   const [plantType, setPlantType] = useState<Plant["species"]>("tree");
   const [panelOpen, setPanelOpen] = useState(false);
+  const [windowHovered, setWindowHovered] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [shadows, setShadows] = useState(true);
   const [notice, setNotice] = useState("");
@@ -648,18 +651,38 @@ useEffect(() => {
   }
 
   return (
-    <main className="app" style={{ position: "relative", width: "100vw", height: "100vh" }}>
+    <main
+      className="app"
+      style={{ position: "relative", width: "100vw", height: "100vh" }}
+      onPointerEnter={() => setWindowHovered(true)}
+      onPointerLeave={() => setWindowHovered(false)}
+    >
       <Canvas
         shadows={shadows}
-        frameloop="demand"
+        frameloop="always"
         camera={CAMERA_OPTIONS}
         dpr={DPR_RANGE}
         gl={GL_OPTIONS}
       >
         <TerrariumSky />
+        <SkyBubbles />
         <World showGrid={showGrid} shadows={shadows} />
       </Canvas>
-      <div style={panelOpen ? PANEL_STYLE : { ...PANEL_STYLE, width: "auto", padding: 7 }}>
+      <div style={{
+        ...PANEL_STYLE,
+        position: "absolute",
+        top: 40,
+        right: "auto",
+        bottom: "auto",
+        left: 18,
+        zIndex: 100,
+        display: windowHovered || panelOpen ? "flex" : "none",
+        flexDirection: "column-reverse",
+        gap: 8,
+        maxHeight: "calc(100vh - 36px)",
+        overflowY: "auto",
+        ...(panelOpen ? {} : { width: "auto", padding: 7 }),
+      }}>
         <button type="button" style={CONTROL_STYLE} onClick={() => setPanelOpen(open => !open)} aria-expanded={panelOpen} aria-controls="eden-building-panel">
           {panelOpen ? "Close controls" : "Build"}
         </button>

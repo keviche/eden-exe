@@ -547,6 +547,306 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
     return b.parts;
   }
 
+
+  // === FRUTIGER AERO CUSTOM BUILDINGS ===
+  // Each building has its own silhouette, architecture and growth stages.
+
+  if (variant === "rooftop-farm") {
+    const white = "#edfff8";
+    const aqua = "#68e2e4";
+    const green = "#4fc979";
+    const height = base + floors * floorHeight;
+
+    // Broad, low agricultural building with a bright glass frontage.
+    b.box([width * 0.94, height - base, depth * 0.88],
+      [0, base + (height - base) / 2, 0], "#d8f4e8");
+
+    b.box([width * 0.96, 0.13, depth * 0.9],
+      [0, base + 0.08, 0], "#f6fffb");
+
+    // Horizontal ribbons of aqua greenhouse glazing.
+    for (let level = 0; level < floors; level++) {
+      const y = base + level * floorHeight + floorHeight * 0.57;
+      b.box([width * 0.82, 0.38, 0.035],
+        [0, y, depth * 0.45], "#80ecf4", [0, 0, 0], "glass");
+      b.box([width * 0.82, 0.055, 0.065],
+        [0, y + 0.22, depth * 0.46], white, [0, 0, 0], "metal");
+    }
+
+    // Main rooftop farm platform.
+    b.box([width * 0.99, 0.14, depth * 0.98],
+      [0, height + 0.06, 0], white);
+    b.box([width * 0.9, 0.045, depth * 0.88],
+      [0, height + 0.15, 0], "#7ed5a6");
+
+    // Crop beds, with alternating lush rows.
+    for (let row = 0; row < 5; row++) {
+      const z = (row - 2) * depth * 0.145;
+      b.box([width * 0.73, 0.09, depth * 0.095],
+        [0, height + 0.22, z], "#f1fffa");
+      b.box([width * 0.7, 0.025, depth * 0.075],
+        [0, height + 0.275, z], "#2f986a");
+
+      for (let col = 0; col < 7; col++) {
+        const x = (col - 3) * width * 0.095;
+        b.foliage([x, height + 0.34, z],
+          0.065, (row + col) % 2 ? green : "#a0e974");
+      }
+    }
+
+    // Signature stepped upper greenhouse and hydroponic canopy.
+    if (stage >= 1) {
+      const upperY = height + 0.54;
+      b.box([width * 0.63, 0.055, depth * 0.58],
+        [0, upperY, -depth * 0.04], white, [0, 0, 0], "metal");
+
+      for (const x of [-1, 1]) {
+        for (const z of [-1, 1]) {
+          b.add("cylinder",
+            [x * width * 0.3, height + 0.36, z * depth * 0.27 - depth * 0.04],
+            [0.028, 0.4, 0.028], "#f8fffe",
+            [0, 0, 0], "metal");
+        }
+      }
+
+      b.box([width * 0.59, 0.045, depth * 0.54],
+        [0, upperY + 0.04, -depth * 0.04],
+        aqua, [0, 0, 0], "glass");
+
+      // Aqua irrigation channels down the side.
+      for (const side of [-1, 1]) {
+        b.box([0.055, 0.04, depth * 0.7],
+          [side * width * 0.44, height + 0.18, 0],
+          "#39bce1", [0, 0, 0], "glass");
+      }
+    }
+
+    if (stage >= 2) {
+      // Elevated solar-greenhouse crown.
+      const y = height + 0.8;
+      b.box([width * 0.44, 0.06, depth * 0.42],
+        [0, y, -depth * 0.06], "#eaffff",
+        [0, 0, 0], "metal");
+      b.add("sphere", [0, y + 0.13, -depth * 0.06],
+        [width * 0.2, 0.22, depth * 0.19],
+        "#9ceff5", [0, 0, 0], "glass");
+
+      for (const side of [-1, 1]) {
+        solarPanel(b,
+          [side * width * 0.3, height + 0.6, depth * 0.31],
+          width * 0.21, depth * 0.18);
+      }
+    }
+
+    // Farm entrance.
+    b.box([0.45, 0.63, 0.04],
+      [0, base + 0.315, depth * 0.46],
+      "#b8fbff", [0, 0, 0], "glass");
+    b.box([0.65, 0.07, 0.2],
+      [0, base + 0.67, depth * 0.49], white);
+
+    addMoss(b, width, depth, height + 0.3, moss, seed);
+    return b.parts;
+  }
+
+  if (variant === "community-library") {
+    const radius = Math.min(width * 0.43, depth * 0.45);
+    const height = base + floors * floorHeight;
+    const glass = "#82e8f5";
+    const pearl = "#f4fffc";
+
+    // Low circular pavilion: visually unlike the rectangular buildings.
+    b.add("cylinder", [0, base + 0.065, 0],
+      [radius * 1.22, 0.13, radius * 1.22],
+      "#d5f8f3", [0, 0, 0], "metal");
+
+    b.add("cylinder", [0, base + (height - base) / 2, 0],
+      [radius, height - base, radius],
+      glass, [0, 0, 0], "glass");
+
+    // Visible bookshelf bands through the glazed facade.
+    for (let level = 0; level < floors; level++) {
+      const y = base + level * floorHeight + 0.28;
+      for (let shelf = 0; shelf < 2; shelf++) {
+        const shelfY = y + shelf * 0.2;
+        b.box([radius * 1.15, 0.035, 0.18],
+          [0, shelfY, -radius * 0.35], "#e9fff8");
+
+        for (let book = 0; book < 9; book++) {
+          const x = (book - 4) * radius * 0.12;
+          const colors = ["#3cadd0", "#78dca6", "#f2d58a", "#88c3f1"];
+          b.box([0.055, 0.13, 0.11],
+            [x, shelfY + 0.08, -radius * 0.35],
+            colors[(book + level) % colors.length]!);
+        }
+      }
+    }
+
+    // Circular white roof with aqua ring.
+    b.add("cylinder", [0, height + 0.045, 0],
+      [radius * 1.24, 0.09, radius * 1.24],
+      pearl, [0, 0, 0], "metal");
+    b.add("cylinder", [0, height + 0.1, 0],
+      [radius * 1.16, 0.025, radius * 1.16],
+      "#52d8de", [0, 0, 0], "glass");
+
+    // Sweeping flying-saucer roof silhouette.
+    b.add("sphere", [0, height + 0.13, 0],
+      [radius * 1.22, 0.19, radius * 1.22],
+      pearl);
+
+    // Tall glazed entrance portal.
+    b.box([radius * 0.62, 0.78, 0.055],
+      [0, base + 0.4, radius + 0.02],
+      "#c4fcff", [0, 0, 0], "glass");
+    b.box([radius * 0.8, 0.075, 0.2],
+      [0, base + 0.84, radius + 0.08],
+      pearl, [0, 0, 0], "metal");
+
+    if (stage >= 1) {
+      // Central skylight dome.
+      b.add("sphere", [0, height + 0.29, 0],
+        [radius * 0.54, 0.31, radius * 0.54],
+        "#8ceaf8", [0, 0, 0], "glass");
+
+      // White vertical facade ribs.
+      for (let i = 0; i < 12; i++) {
+        const angle = i * Math.PI / 6;
+        b.add("cylinder",
+          [Math.sin(angle) * radius * 0.99,
+           base + (height - base) / 2,
+           Math.cos(angle) * radius * 0.99],
+          [0.025, height - base, 0.025],
+          "#f8fffd", [0, 0, 0], "metal");
+      }
+    }
+
+    if (stage >= 2) {
+      // Luminous rooftop orb and outdoor reading gardens.
+      b.add("sphere", [0, height + 0.59, 0],
+        [0.12, 0.12, 0.12],
+        "#c4ffff", [0, 0, 0], "glass");
+
+      for (const side of [-1, 1]) {
+        planter(b,
+          [side * radius * 1.08, base + 0.03, radius * 0.46],
+          0.16);
+        b.box([0.34, 0.06, 0.15],
+          [side * radius * 0.9, base + 0.22, radius * 0.8],
+          "#d5f6e9");
+      }
+    }
+
+    addMoss(b, width, depth, height + 0.2, moss, seed);
+    return b.parts;
+  }
+
+  if (variant === "eco-apartments") {
+    const pearl = "#f0fffb";
+    const cyan = "#77e4f2";
+    const height = base + floors * floorHeight;
+    const towerWidth = width * 0.72;
+    const towerDepth = depth * 0.7;
+
+    // Narrow, tall tower: staggered levels make it unmistakably residential.
+    b.box([towerWidth, height - base, towerDepth],
+      [0, base + (height - base) / 2, 0],
+      "#dcefeb");
+
+    // Continuous vertical glass spine.
+    b.box([towerWidth * 0.24, height - base, 0.045],
+      [0, base + (height - base) / 2, towerDepth / 2 + 0.025],
+      "#8de9f6", [0, 0, 0], "glass");
+
+    for (let floor = 0; floor < floors; floor++) {
+      const y = base + floor * floorHeight;
+      const shift = floor % 2 === 0 ? -1 : 1;
+
+      // Alternating projecting residential balconies.
+      b.box([towerWidth * 0.78, 0.09, towerDepth * 0.46],
+        [shift * towerWidth * 0.14,
+         y + 0.17,
+         towerDepth * 0.53],
+        pearl, [0, 0, 0], "metal");
+
+      // Curved-feeling aqua glass balcony fronts.
+      b.box([towerWidth * 0.78, 0.25, 0.035],
+        [shift * towerWidth * 0.14,
+         y + 0.34,
+         towerDepth * 0.76],
+        cyan, [0, 0, 0], "glass");
+
+      b.box([towerWidth * 0.8, 0.045, 0.045],
+        [shift * towerWidth * 0.14,
+         y + 0.48,
+         towerDepth * 0.76],
+        pearl, [0, 0, 0], "metal");
+
+      // Apartment windows, clearly separated by floors.
+      for (const side of [-1, 1]) {
+        b.box([towerWidth * 0.28, 0.4, 0.04],
+          [side * towerWidth * 0.29,
+           y + 0.51,
+           towerDepth / 2 + 0.03],
+          "#65d9ee", [0, 0, 0], "glass");
+      }
+
+      // Balconies get individual mini-gardens.
+      if (stage >= 1 || floor === 0) {
+        const x = shift * towerWidth * 0.14
+          + (shift === 1 ? towerWidth * 0.25 : -towerWidth * 0.25);
+        b.foliage([x, y + 0.49, towerDepth * 0.58],
+          0.13, floor % 2 ? "#54ca87" : "#8be4a0");
+      }
+
+      // White floor divider.
+      b.box([towerWidth + 0.045, 0.055, towerDepth + 0.05],
+        [0, y + floorHeight - 0.03, 0],
+        pearl, [0, 0, 0], "metal");
+    }
+
+    // Ground-floor lobby.
+    b.box([towerWidth * 0.5, 0.64, 0.05],
+      [0, base + 0.32, towerDepth / 2 + 0.045],
+      "#b1faff", [0, 0, 0], "glass");
+
+    // Rooftop garden lounge.
+    b.box([towerWidth * 1.1, 0.12, towerDepth * 1.1],
+      [0, height + 0.06, 0], pearl, [0, 0, 0], "metal");
+
+    if (stage >= 1) {
+      for (const side of [-1, 1]) {
+        planter(b,
+          [side * towerWidth * 0.39, height + 0.13, 0],
+          0.16);
+      }
+    }
+
+    if (stage >= 2) {
+      // Signature floating cyan canopy above the rooftop lounge.
+      for (const x of [-1, 1]) {
+        b.add("cylinder",
+          [x * towerWidth * 0.39, height + 0.34, 0],
+          [0.035, 0.48, 0.035],
+          "#f5fffc", [0, 0, 0], "metal");
+      }
+
+      b.box([towerWidth * 0.95, 0.065, towerDepth * 0.65],
+        [0, height + 0.59, 0],
+        "#8deaf4", [0, 0, 0], "glass");
+
+      // Hanging vines from the lounge canopy.
+      for (const side of [-1, 1]) {
+        b.foliage(
+          [side * towerWidth * 0.35, height + 0.4, 0],
+          0.14, "#5bcf92");
+      }
+    }
+
+    addMoss(b, width, depth, height + 0.16, moss, seed);
+    return b.parts;
+  }
+
   let roofY = facade(b, width, depth, floors, floorHeight, wallColor);
   flatRoof(b, width, depth, roofY);
   entrance(b, width, depth, stage);
