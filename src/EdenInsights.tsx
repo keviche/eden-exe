@@ -115,6 +115,7 @@ function piePath(startDegrees: number, sweepDegrees: number) {
 
 export function ActivityStats() {
   const activity = useWorldStore(selectActivity);
+  const bubblePops = useWorldStore(state => state.world.activity.bubblePops ?? 0);
   const progression = useWorldStore(selectProgression);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -275,6 +276,14 @@ export function ActivityStats() {
               </span>
             ))}
           </div>
+        </div>
+        {/* EDEN BUBBLE POP COUNTER V1 */}
+        <div className="eden-bubble-counter" aria-label={`Bubbles popped today: ${bubblePops}`}>
+          <span className="eden-bubble-counter-label">
+            <span className="eden-bubble-counter-orb" aria-hidden="true" />
+            Bubbles popped
+          </span>
+          <strong>{bubblePops}</strong>
         </div>
       </div>
     </div>

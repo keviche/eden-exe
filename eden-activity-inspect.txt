@@ -1,0 +1,3572 @@
+EDEN.EXE - ACTIVITY SYSTEM AUDIT
+
+=== GIT STATUS ===
+## main...origin/main
+
+
+=== SOURCE FILE MANIFEST ===
+.oxlintrc.json [priority=0]
+.prettierrc.json [priority=0]
+electron/activityMonitor.cjs [priority=582]
+electron/activityMonitor.test.js [priority=542]
+electron/main.cjs [priority=386]
+electron/preload.cjs [priority=386]
+electron/titlebar-preload.cjs [priority=382]
+electron/titlebar.html [priority=350]
+electron/titlebar.js [priority=350]
+index.html [priority=0]
+package.json [priority=1004]
+src/App.tsx [priority=464]
+src/BubbleFilm.tsx [priority=0]
+src/EdenInsights.tsx [priority=12]
+src/FastForwardControls.tsx [priority=0]
+src/SkyBubbles.tsx [priority=0]
+src/TerrainHills.tsx [priority=0]
+src/TerrariumSky.tsx [priority=0]
+src/WaterSurface.tsx [priority=0]
+src/edenAPI.d.ts [priority=8]
+src/edenModels.ts [priority=0]
+src/main.tsx [priority=220]
+src/simulation/navigation.ts [priority=0]
+src/simulation/types.ts [priority=244]
+src/simulation/worldDefaults.ts [priority=12]
+src/state/worldPersistence.ts [priority=324]
+src/state/worldStore.test.ts [priority=84]
+src/state/worldStore.ts [priority=544]
+src/tests/navigation.test.ts [priority=0]
+src/tests/setup.test.ts [priority=0]
+src/tests/worldStore.test.ts [priority=36]
+src/tests/worldTime.test.ts [priority=0]
+tsconfig.app.json [priority=0]
+tsconfig.json [priority=0]
+tsconfig.node.json [priority=0]
+vite.config.ts [priority=0]
+
+=== ACTIVITY CODE REFERENCES ===
+
+--- package.json ---
+20: "active-win": "^8.2.1",
+
+--- electron/activityMonitor.cjs ---
+1: const { powerMonitor } = require("electron");
+6: let activeWin = null;
+8: async function initActiveWin() {
+9: if (!activeWin) {
+11: activeWin = (await import("active-win")).default;
+13: console.error("[EDEN] Failed to load active-win:", err);
+41: await initActiveWin();
+42: const idleSeconds = powerMonitor.getSystemIdleTime();
+43: const isSystemIdle = idleSeconds >= IDLE_THRESHOLD_SECONDS;
+49: if (activeWin) {
+51: const winInfo = await activeWin();
+62: const newStatus = isSystemIdle ? "idle" : "active";
+73: category: isSystemIdle ? "idle" : category,
+
+--- src/state/worldStore.ts ---
+2: import type { ActivityCategory, Building, EntityId, Plant, Resident, Weather, WorldState } from "../simulation/types";
+15: const ACTIVITY_KEY = { productivity: "productivityPoints", leisure: "leisurePoints", idle: "idlePoints" } as const;
+22: systemIdle: boolean;
+24: setSystemIdle: (idle: boolean) => void;
+34: setActivityCategory: (category: ActivityCategory, at?: number) => void;
+35: recordInput: (at?: number) => void;
+36: addActivityPoints: (category: ActivityCategory, points: number) => void;
+38: advanceTime: (seconds: number, at?: number) => void;
+49: category: ActivityCategory,
+252: systemIdle: false,
+257: setSystemIdle: (idle) =>
+259: if (state.systemIdle === idle) {
+269: systemIdle: idle,
+295: if (state.systemIdle) {
+310: if (state.systemIdle) {
+398: setActivityCategory: (category, at = Date.now()) =>
+412: category: state.systemIdle ? "idle" : category,
+418: recordInput: (at = Date.now()) =>
+425: category: state.systemIdle
+486: advanceTime: (seconds, at = Date.now()) => {
+497: const category: ActivityCategory = state.systemIdle ? "idle" : world.activity.category;
+
+--- electron/activityMonitor.test.js ---
+4: // Mock electron's powerMonitor
+6: powerMonitor: {
+7: getSystemIdleTime: vi.fn(() => 0), // 0 seconds idle = active
+
+--- src/App.tsx ---
+821: const setSystemIdle = useWorldStore(
+822: (state) => state.setSystemIdle
+825: const advanceTime = useWorldStore(state => state.advanceTime);
+826: const recordInput = useWorldStore(state => state.recordInput);
+827: const setActivityCategory = useWorldStore(state => state.setActivityCategory);
+848: setSystemIdle(activity.status === "idle");
+851: setActivityCategory(activity.category);
+855: const unsubscribe = api.onActivityChanged(handleActivity);
+857: api.getCurrentActivity()
+867: }, [setSystemIdle, setActivityCategory]); // <-- Include both here
+890: advanceTime(Math.max(0, now - previous) / 1_000, now);
+898: recordInput();
+899: setActivityCategory(event.code === "Digit1" ? "productivity" : event.code === "Digit2" ? "leisure" : "idle");
+907: if (now - lastInput >= 200) { recordInput(); lastInput = now; }
+919: }, [advanceTime, recordInput, setActivityCategory]);
+989: <small>Productivity {worldActivity.productivityPoints.toFixed(1)} · Leisure {worldActivity.leisurePoints.toFixed(1)} · Idle {worldActivity.idlePoints.toFixed(1)} points</small>
+
+--- electron/main.cjs ---
+5: ipcMain,
+33: ipcMain.handle("world:load", async () => {
+46: ipcMain.handle("world:save", async (_event, world) => {
+96: ipcMain.handle("activity:get-current", (event) => {
+388: ipcMain.on("titlebar:drag-start", (event) => {
+430: ipcMain.on("titlebar:drag-end", (event) => {
+438: ipcMain.on("titlebar:close", (event) => {
+449: ipcMain.on("titlebar:minimize", (event) => {
+460: ipcMain.on("titlebar:fullscreen", (event) => {
+
+--- electron/preload.cjs ---
+1: const { contextBridge, ipcRenderer } = require("electron");
+3: contextBridge.exposeInMainWorld("edenAPI", {
+5: loadWorld: () => ipcRenderer.invoke("world:load"),
+8: ipcRenderer.invoke("world:save", world),
+11: getCurrentActivity: () =>
+12: ipcRenderer.invoke("activity:get-current"),
+15: onActivityChanged: (callback) => {
+20: ipcRenderer.on("activity:changed", listener);
+24: ipcRenderer.removeListener(
+
+--- electron/titlebar-preload.cjs ---
+1: const { contextBridge, ipcRenderer } = require("electron");
+3: contextBridge.exposeInMainWorld("titlebarAPI", {
+4: startDrag: () => ipcRenderer.send("titlebar:drag-start"),
+5: endDrag: () => ipcRenderer.send("titlebar:drag-end"),
+7: close: () => ipcRenderer.send("titlebar:close"),
+8: minimize: () => ipcRenderer.send("titlebar:minimize"),
+9: fullscreen: () => ipcRenderer.send("titlebar:fullscreen"),
+11: ipcRenderer.on("titlebar:placement", (_event, placement) => {
+
+--- src/state/worldPersistence.ts ---
+3: import type { ActivityCategory, Building, Plant, Resident, WorldState } from "../simulation/types";
+27: const category: ActivityCategory =
+82: productivityPoints:
+83: typeof activitySource.productivityPoints === "number"
+84: ? activitySource.productivityPoints
+89: leisurePoints:
+90: typeof activitySource.leisurePoints === "number"
+91: ? activitySource.leisurePoints
+95: idlePoints:
+96: typeof activitySource.idlePoints === "number"
+97: ? activitySource.idlePoints
+
+--- src/simulation/types.ts ---
+4: export type ActivityCategory = "productivity" | "leisure" | "idle";
+65: category: ActivityCategory;
+67: productivityPoints: number;
+68: leisurePoints: number;
+69: idlePoints: number;
+73: consumedMilestones: Record<ActivityCategory, number>;
+
+--- src/state/worldStore.test.ts ---
+15: store.setActivityCategory('leisure');
+19: store.setActivityCategory('productivity');
+23: it('forces category to idle when systemIdle is set to true', () => {
+26: store.setActivityCategory('productivity');
+30: store.setSystemIdle(true);
+34: store.setSystemIdle(false);
+
+--- src/tests/worldStore.test.ts ---
+43: store.setActivityCategory("productivity");
+50: expect(activity.productivityPoints).toBe(10);
+51: expect(activity.idlePoints).toBe(5);
+88: useWorldStore.getState().advanceTime(1, afterBoundary);
+92: expect(world.activity.leisurePoints).toBe(0);
+93: useWorldStore.getState().advanceTime(1, afterBoundary + 1_000);
+125: useWorldStore.getState().advanceTime(60);
+134: store.advanceTime(100);
+139: expect(world.activity.leisurePoints).toBe(0);
+
+--- src/EdenInsights.tsx ---
+150: { key: "productivity", label: "Productivity", points: activity.productivityPoints, milestones: progression.consumedMilestones.productivity },
+151: { key: "leisure", label: "Leisure", points: activity.leisurePoints, milestones: progression.consumedMilestones.leisure },
+152: { key: "idle", label: "Idle", points: activity.idlePoints, milestones: progression.consumedMilestones.idle },
+
+--- src/simulation/worldDefaults.ts ---
+19: productivityPoints: 0,
+20: leisurePoints: 0,
+21: idlePoints: 0,
+
+--- src/edenAPI.d.ts ---
+22: getCurrentActivity: () => Promise<ActivityEvent | null>;
+25: onActivityChanged: (
+
+=== FULL RELEVANT SOURCE FILES ===
+
+=================================================================
+FILE: package.json
+=================================================================
+
+{
+  "name": "eden-exe",
+  "private": true,
+  "version": "0.0.0",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:desktop": "concurrently -k \"npm run dev -- --host 127.0.0.1 --port 5173 --strictPort\" \"npm run electron:dev\"",
+    "electron:dev": "wait-on tcp:127.0.0.1:5173 && electron .",
+    "lint": "oxlint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
+    "active-win": "^8.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "three": "^0.186.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.81.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.3",
+    "wait-on": "^9.5.1"
+  }
+}
+
+
+=================================================================
+FILE: electron/activityMonitor.cjs
+=================================================================
+
+const { powerMonitor } = require("electron");
+
+const IDLE_THRESHOLD_SECONDS = 300;
+const CHECK_INTERVAL_MS = 2000;
+
+let activeWin = null;
+
+async function initActiveWin() {
+  if (!activeWin) {
+    try {
+      activeWin = (await import("active-win")).default;
+    } catch (err) {
+      console.error("[EDEN] Failed to load active-win:", err);
+    }
+  }
+}
+
+function classifyActivity(appName, windowTitle) {
+  const app = (appName || "").toLowerCase();
+  const title = (windowTitle || "").toLowerCase();
+
+  const productivityKeywords = ["code", "cursor", "terminal", "xcode", "figma", "notion", "word", "excel", "docs", "postman"];
+  const leisureKeywords = ["steam", "spotify", "discord", "netflix", "twitch", "vlc", "game", "reddit"];
+  const leisureSites = ["youtube", "twitch", "reddit", "netflix", "twitter", "x.com"];
+
+  if (productivityKeywords.some(keyword => app.includes(keyword) || title.includes(keyword))) {
+    return "productivity";
+  }
+  if (leisureKeywords.some(keyword => app.includes(keyword) || title.includes(keyword)) ||
+      leisureSites.some(site => title.includes(site))) {
+    return "leisure";
+  }
+  return "productivity"; // Default active category fallback
+}
+
+function createActivityMonitor(onStatusChange) {
+  let intervalId = null;
+  let lastState = null;
+
+  async function checkActivity() {
+    await initActiveWin();
+    const idleSeconds = powerMonitor.getSystemIdleTime();
+    const isSystemIdle = idleSeconds >= IDLE_THRESHOLD_SECONDS;
+
+    let appName = "";
+    let windowTitle = "";
+    let category = "productivity";
+
+    if (activeWin) {
+      try {
+        const winInfo = await activeWin();
+        if (winInfo && winInfo.owner) {
+          appName = winInfo.owner.name;
+          windowTitle = winInfo.title || "";
+          category = classifyActivity(appName, windowTitle);
+        }
+      } catch (err) {
+        // Handle window polling errors silently
+      }
+    }
+
+    const newStatus = isSystemIdle ? "idle" : "active";
+    
+    // Trigger update if status or active app/title context changes
+    if (
+      !lastState ||
+      lastState.status !== newStatus ||
+      lastState.windowTitle !== windowTitle ||
+      lastState.appName !== appName
+    ) {
+      lastState = {
+        status: newStatus,
+        category: isSystemIdle ? "idle" : category,
+        idleSeconds,
+        appName,
+        windowTitle,
+        timestamp: Date.now(),
+      };
+
+      onStatusChange(lastState);
+    }
+  }
+
+  return {
+    start() {
+      if (intervalId !== null) return;
+      checkActivity();
+      intervalId = setInterval(checkActivity, CHECK_INTERVAL_MS);
+    },
+    stop() {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    },
+    getStatus() {
+      return lastState;
+    },
+  };
+}
+
+module.exports = {
+  createActivityMonitor,
+  IDLE_THRESHOLD_SECONDS,
+};
+
+=================================================================
+FILE: src/state/worldStore.ts
+=================================================================
+
+import { create } from "zustand";
+import type { ActivityCategory, Building, EntityId, Plant, Resident, Weather, WorldState } from "../simulation/types";
+import { DEFAULT_WORLD_STATE, getCityDayKey, selectWeatherCondition } from "../simulation/worldDefaults";
+import { BUILDING_CATALOG, findFreePlot, findFreePlantSite, GRID_SIZE, MAX_BUILDING_FLOORS } from "../edenModels";
+import { findOpenResidentCell, findResidentPath, residentGridPosition, residentOccupiedPlots, residentWorldPosition } from "../simulation/navigation";
+
+export const ACTIVITY_MILESTONE_POINTS = 5;
+export const MAX_NATURE_GROWTH = 3;
+export const NATURE_GROWTH_PER_POINT = 0.12;
+export const MOSS_GROWTH_PER_POINT = 0.035;
+
+export const MAX_BUILDINGS = 80;
+export const MAX_PLANTS = 180;
+export const MAX_RESIDENTS = 40;
+const ACTIVITY_KEY = { productivity: "productivityPoints", leisure: "leisurePoints", idle: "idlePoints" } as const;
+
+type NonIdleCategory = "productivity" | "leisure";
+
+interface WorldStore {
+  world: WorldState;
+
+  systemIdle: boolean;
+  lastNonIdleCategory: NonIdleCategory;
+  setSystemIdle: (idle: boolean) => void;
+
+  resetWorld: (at?: number) => void;
+  loadWorld: (world: WorldState) => void;
+  addBuilding: (building: Building) => void;
+  removeBuilding: (id: EntityId) => void;
+  addPlant: (plant: Plant) => void;
+  removePlant: (id: EntityId) => void;
+  addResident: (resident: Resident) => void;
+  removeResident: (id: EntityId) => void;
+  setActivityCategory: (category: ActivityCategory, at?: number) => void;
+  recordInput: (at?: number) => void;
+  addActivityPoints: (category: ActivityCategory, points: number) => void;
+  unlockBuilding: (buildingType: string) => void;
+  advanceTime: (seconds: number, at?: number) => void;
+  setWeather: (weather: Weather) => void;
+}
+
+const freshWorld = (at = Date.now()): WorldState => ({
+  ...structuredClone(DEFAULT_WORLD_STATE),
+  cityDayKey: getCityDayKey(new Date(at)),
+  waterSeed: Math.floor(Math.random() * 4294967295) + 1,
+});
+
+const getNonIdleCategory = (
+  category: ActivityCategory,
+  fallback: NonIdleCategory = "productivity"
+): NonIdleCategory =>
+  category === "productivity" || category === "leisure"
+    ? category
+    : fallback;
+
+const createId = (type: string) =>
+  `${type}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+
+function createBuilding(world: WorldState, at: number): Building | null {
+  if (world.buildings.length >= MAX_BUILDINGS) return null;
+  const residents = residentOccupiedPlots(world.residents);
+  // Let the growing city feel cottage-scale and garden-led while keeping every
+  // existing building type available to the simulation.
+  const catalog: (typeof BUILDING_CATALOG)[number][] = [];
+  for (const entry of BUILDING_CATALOG) {
+    const copies = entry.id === "solar-house" ? 4 : entry.id === "greenhouse" ? 2 : 1;
+    for (let copy = 0; copy < copies; copy++) catalog.push(entry);
+  }
+  for (let attempt = 0; attempt < catalog.length; attempt++) {
+    const config = catalog[Math.floor(Math.random() * catalog.length)]!;
+    const plot = findFreePlot([...world.buildings, ...residents], world.plants, config.width, config.depth);
+    if (!plot) continue;
+    return { type: "building", id: createId("building"), name: config.name, variantId: config.id, gridPosition: plot, footprint: { width: config.width, depth: config.depth }, rotation: 0, floors: Math.min(config.floors, MAX_BUILDING_FLOORS), moss: 0, createdAt: at };
+  }
+  return null;
+}
+
+function createPlant(world: WorldState, at: number): Plant | null {
+  if (world.plants.length >= MAX_PLANTS) return null;
+  // Randomized candidates keep free navigation corridors around structures.
+  const residents = residentOccupiedPlots(world.residents);
+  const position = findFreePlantSite([...world.buildings, ...world.plants, ...residents]);
+  if (!position) return null;
+  const species = (["tree", "shrub", "fern", "flower", "grass"] as const)[Math.floor(Math.random() * 5)]!;
+  return { type: "plant", id: createId("plant"), species, variantId: species, gridPosition: position, growth: 0.2 + Math.random() * 0.35, createdAt: at };
+}
+
+
+const EDEN_GROWTH_MAX = 3;
+
+function edenRandom(id: string, salt = 0): number {
+  let hash = 2166136261 ^ salt;
+  for (let i = 0; i < id.length; i++) {
+    hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+function growEden(world: WorldState, points: number): WorldState {
+  if (points <= 0) return world;
+
+  return {
+    ...world,
+    buildings: world.buildings.map(building => {
+      const speed = 0.65 + edenRandom(building.id, 7) * 0.7;
+      return {
+        ...building,
+        moss: Math.min(
+          1,
+          (building.moss ?? 0) + points * 0.025 * speed
+        ),
+      };
+    }),
+    plants: world.plants.map(plant => {
+      const speed = 0.65 + edenRandom(plant.id, 13) * 0.7;
+      const maxGrowth =
+        1.4 + edenRandom(plant.id, 29) * 1.6;
+
+      return {
+        ...plant,
+        growth: Math.min(
+          Math.min(EDEN_GROWTH_MAX, maxGrowth),
+          plant.growth + points * 0.075 * speed
+        ),
+      };
+    }),
+  };
+}
+
+function applyMilestones(worldInput: WorldState, at: number): WorldState {
+  let world = worldInput;
+  const consumedMilestones = { ...world.progression.consumedMilestones };
+  for (const category of ["productivity", "leisure", "idle"] as const) {
+    const total = world.activity[ACTIVITY_KEY[category]];
+    const earned = Math.floor(total / ACTIVITY_MILESTONE_POINTS);
+    let consumed = consumedMilestones[category];
+    while (consumed < earned) {
+      let changed = false;
+      if (category === "productivity") {
+        const eligible = world.buildings.find(building => (building.floors ?? 1) < MAX_BUILDING_FLOORS);
+        if (eligible) {
+          world = { ...world, buildings: world.buildings.map(building => building.id === eligible.id ? { ...building, floors: Math.min(MAX_BUILDING_FLOORS, (building.floors ?? 1) + 1), growth: 1 } : building) };
+          changed = true;
+        } else {
+          const building = createBuilding(world, at);
+          if (building) { world = { ...world, buildings: [...world.buildings, building] }; changed = true; }
+        }
+      } else if (category === "leisure") {
+        const buildingCount = world.buildings.length;
+        const treeCount = world.plants.filter(
+          plant => plant.species === "tree"
+        ).length;
+
+        // Roughly 1 tree per building, with some variation.
+        const maxTrees = Math.max(
+          1,
+          Math.ceil(buildingCount * 1.2)
+        );
+
+        // Limit total nature so buildings remain visually prominent.
+        const maxNature = Math.max(
+          2,
+          Math.ceil(buildingCount * 1.8)
+        );
+
+        if (world.plants.length < maxNature) {
+          let plant = createPlant(world, at);
+
+          if (plant) {
+            if (
+              plant.species === "tree" &&
+              treeCount >= maxTrees
+            ) {
+              const alternatives = [
+                "shrub",
+                "fern",
+                "flower",
+                "grass",
+              ] as const;
+
+              const species =
+                alternatives[
+                  Math.floor(Math.random() * alternatives.length)
+                ]!;
+
+              plant = {
+                ...plant,
+                species,
+                variantId: species,
+              };
+            }
+
+            world = {
+              ...world,
+              plants: [...world.plants, plant],
+            };
+
+            changed = true;
+          }
+        }
+
+        // Existing buildings continue developing moss and vines.
+        if (
+          earned >= 3 &&
+          world.buildings.some(
+            building => (building.moss ?? 0) < 1
+          )
+        ) {
+          world = {
+            ...world,
+            buildings: world.buildings.map(building => ({
+              ...building,
+              moss: Math.min(
+                1,
+                Math.max(
+                  building.moss ?? 0,
+                  (earned - 2) / 4
+                )
+              ),
+            })),
+          };
+
+          changed = true;
+        }
+
+      } else if (world.residents.length < MAX_RESIDENTS) {
+        const cell = findOpenResidentCell(world.buildings, world.plants, world.residents.map(resident => resident.position));
+        if (!cell) break;
+        const building = world.buildings[Math.floor(Math.random() * Math.max(1, world.buildings.length))];
+        const resident: Resident = { type: "resident", id: createId("resident"), name: `Resident ${world.residents.length + 1}`, position: residentWorldPosition(cell), activity: "walking", homeId: building?.id, route: [], createdAt: at };
+        world = { ...world, residents: [...world.residents, resident] }; changed = true;
+      }
+      if (!changed) break;
+      consumed++;
+    }
+    consumedMilestones[category] = consumed;
+  }
+  return { ...world, progression: { ...world.progression, consumedMilestones } };
+}
+
+function dailyWeather(dayKey: string, at: number): Weather {
+  return { condition: selectWeatherCondition(), updatedAt: at, cityDayKey: dayKey };
+}
+
+export const useWorldStore = create<WorldStore>((set) => ({
+  world: freshWorld(),
+
+  // --------------------------------------------------
+  // System-wide idle monitoring
+  // --------------------------------------------------
+
+  systemIdle: false,
+  lastNonIdleCategory: getNonIdleCategory(
+    DEFAULT_WORLD_STATE.activity.category
+  ),
+
+  setSystemIdle: (idle) =>
+    set((state) => {
+      if (state.systemIdle === idle) {
+        return state;
+      }
+
+      const previousCategory = getNonIdleCategory(
+        state.world.activity.category,
+        state.lastNonIdleCategory
+      );
+
+      return {
+        systemIdle: idle,
+        lastNonIdleCategory: previousCategory,
+        world: {
+          ...state.world,
+          lastActiveAt: idle
+            ? state.world.lastActiveAt
+            : Date.now(),
+          activity: {
+            ...state.world.activity,
+            category: idle ? "idle" : previousCategory,
+          },
+        },
+      };
+    }),
+
+  // --------------------------------------------------
+  // World persistence
+  // --------------------------------------------------
+
+  resetWorld: (at = Date.now()) =>
+    set((state) => {
+      const world = freshWorld(at);
+      const lastNonIdleCategory = getNonIdleCategory(
+        world.activity.category
+      );
+
+      if (state.systemIdle) {
+        world.activity.category = "idle";
+      }
+
+      return { world, lastNonIdleCategory };
+    }),
+
+  loadWorld: (savedWorld) =>
+    set((state) => {
+      const world = structuredClone(savedWorld);
+      const lastNonIdleCategory = getNonIdleCategory(
+        world.activity.category,
+        state.lastNonIdleCategory
+      );
+
+      if (state.systemIdle) {
+        world.activity.category = "idle";
+      } else if (world.activity.category === "idle") {
+        world.activity.category = lastNonIdleCategory;
+      }
+
+      return { world, lastNonIdleCategory };
+    }),
+
+  // --------------------------------------------------
+  // Buildings
+  // --------------------------------------------------
+
+  addBuilding: (building) =>
+    set((state) => ({
+      world: {
+        ...state.world,
+        buildings: [
+          ...state.world.buildings,
+          structuredClone(building),
+        ],
+      },
+    })),
+
+  removeBuilding: (id) =>
+    set((state) => ({
+      world: {
+        ...state.world,
+        buildings: state.world.buildings.filter(
+          (building) => building.id !== id
+        ),
+      },
+    })),
+
+  // --------------------------------------------------
+  // Plants
+  // --------------------------------------------------
+
+  addPlant: (plant) =>
+    set((state) => ({
+      world: {
+        ...state.world,
+        plants: [
+          ...state.world.plants,
+          structuredClone(plant),
+        ],
+      },
+    })),
+
+  removePlant: (id) =>
+    set((state) => ({
+      world: {
+        ...state.world,
+        plants: state.world.plants.filter(
+          (plant) => plant.id !== id
+        ),
+      },
+    })),
+
+  // --------------------------------------------------
+  // Residents
+  // --------------------------------------------------
+
+  addResident: (resident) =>
+    set((state) => ({
+      world: {
+        ...state.world,
+        residents: [
+          ...state.world.residents,
+          structuredClone(resident),
+        ],
+      },
+    })),
+
+  removeResident: (id) =>
+    set((state) => ({
+      world: {
+        ...state.world,
+        residents: state.world.residents.filter(
+          (resident) => resident.id !== id
+        ),
+      },
+    })),
+
+  // --------------------------------------------------
+  // Activity category
+  // --------------------------------------------------
+
+  setActivityCategory: (category, at = Date.now()) =>
+    set((state) => {
+      const lastNonIdleCategory = getNonIdleCategory(
+        category,
+        state.lastNonIdleCategory
+      );
+
+      return {
+        lastNonIdleCategory,
+        world: {
+          ...state.world,
+          lastActiveAt: at,
+          activity: {
+            ...state.world.activity,
+            category: state.systemIdle ? "idle" : category,
+          },
+        },
+      };
+    }),
+
+  recordInput: (at = Date.now()) =>
+    set((state) => ({
+      world: {
+        ...state.world,
+        lastActiveAt: at,
+        activity: {
+          ...state.world.activity,
+          category: state.systemIdle
+            ? "idle"
+            : getNonIdleCategory(
+                state.world.activity.category,
+                state.lastNonIdleCategory
+              ),
+        },
+      },
+    })),
+
+  addActivityPoints: (category, points) => {
+    if (!Number.isFinite(points) || points <= 0) return;
+
+    set(state => {
+      let world = applyMilestones({
+        ...state.world,
+        activity: {
+          ...state.world.activity,
+          [ACTIVITY_KEY[category]]:
+            state.world.activity[ACTIVITY_KEY[category]] + points,
+        },
+      }, Date.now());
+
+      world = growEden(world, points);
+
+      return { world };
+    });
+  },
+
+  // --------------------------------------------------
+  // Progression
+  // --------------------------------------------------
+
+  unlockBuilding: (buildingType) =>
+    set((state) => {
+      if (
+        state.world.progression.unlockedBuildings.includes(
+          buildingType
+        )
+      ) {
+        return state;
+      }
+
+      return {
+        world: {
+          ...state.world,
+          progression: {
+            ...state.world.progression,
+            unlockedBuildings: [
+              ...state.world.progression.unlockedBuildings,
+              buildingType,
+            ],
+          },
+        },
+      };
+    }),
+
+  // --------------------------------------------------
+  // Simulation timer
+  // --------------------------------------------------
+
+  advanceTime: (seconds, at = Date.now()) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    set(state => {
+      const dayKey = getCityDayKey(new Date(at));
+      let world = state.world;
+      if (world.cityDayKey !== dayKey) {
+        world = { ...freshWorld(at), weather: dailyWeather(dayKey, at) };
+      }
+
+      // Electron determines whether the system is idle.
+      // Otherwise, use the selected productivity/leisure/idle category.
+      const category: ActivityCategory = state.systemIdle ? "idle" : world.activity.category;
+
+      world = { ...world, simulationTime: world.simulationTime + seconds, activity: { ...world.activity, category, [ACTIVITY_KEY[category]]: world.activity[ACTIVITY_KEY[category]] + seconds / 60 } };
+      if (world.residents.length) {
+        const isNight = world.simulationTime % 600 >= 360;
+        world = { ...world, residents: world.residents.map(resident => {
+          if (isNight) {
+            const home = world.buildings.find(building => building.id === resident.homeId);
+            const homePosition = home ? {
+              x: (home.gridPosition.x + home.footprint.width / 2 - GRID_SIZE / 2) * 2,
+              y: 0,
+              z: (home.gridPosition.z + home.footprint.depth / 2 - GRID_SIZE / 2) * 2,
+            } : resident.position;
+            return { ...resident, activity: "resting", position: homePosition, route: [] };
+          }
+          let route = resident.route ?? [];
+          if (!route.length) {
+            const target = findOpenResidentCell(world.buildings, world.plants, world.residents.map(other => other.position));
+            if (target) route = findResidentPath(residentGridPosition(resident.position), target, world.buildings, world.plants) ?? [];
+          }
+          const nextCell = route[0];
+          if (!nextCell) return { ...resident, activity: "walking", route: [] };
+          const target = residentWorldPosition(nextCell);
+          const dx = target.x - resident.position.x, dz = target.z - resident.position.z, distance = Math.hypot(dx, dz);
+          const step = Math.min(distance, Math.min(seconds, 2) * 0.35);
+          if (distance <= step + 0.01) return { ...resident, activity: "walking", position: target, route: route.slice(1) };
+          return { ...resident, activity: "walking", route, position: { ...resident.position, x: resident.position.x + dx / distance * step, z: resident.position.z + dz / distance * step } };
+        }) };
+      }
+
+      world = growEden(applyMilestones(world, at), seconds / 60);
+
+      return { world };
+    });
+  },
+
+  // --------------------------------------------------
+  // Weather
+  // --------------------------------------------------
+
+  setWeather: weather => set(state => ({
+      world: {
+        ...state.world,
+        weather: structuredClone(weather),
+      },
+    })),
+}));
+
+// --------------------------------------------------
+// Selectors
+// --------------------------------------------------
+
+export const selectBuildings = (state: WorldStore) => state.world.buildings;
+export const selectPlants = (state: WorldStore) => state.world.plants;
+export const selectResidents = (state: WorldStore) => state.world.residents;
+export const selectWeather = (state: WorldStore) => state.world.weather;
+export const selectActivity = (state: WorldStore) => state.world.activity;
+export const selectProgression = (state: WorldStore) => state.world.progression;
+export const selectSimulationTime = (state: WorldStore) => state.world.simulationTime;
+
+=================================================================
+FILE: electron/activityMonitor.test.js
+=================================================================
+
+// Test file: electron/activityMonitor.test.js
+const { describe, it, expect, vi, beforeEach } = require('vitest');
+
+// Mock electron's powerMonitor
+vi.mock('electron', () => ({
+  powerMonitor: {
+    getSystemIdleTime: vi.fn(() => 0), // 0 seconds idle = active
+  },
+}));
+
+describe('Activity Monitor Classifier Logic', () => {
+  it('correctly classifies productivity applications and windows', () => {
+    // If you export classifyActivity from activityMonitor.cjs:
+    // const { classifyActivity } = require('./activityMonitor.cjs');
+    
+    // Example test assertions for keywords:
+    const productivityExamples = [
+      { app: 'Visual Studio Code', title: 'index.tsx - Eden' },
+      { app: 'Terminal', title: 'npm run dev' },
+      { app: 'Figma', title: 'World Design UI' }
+    ];
+
+    productivityExamples.forEach(({ app, title }) => {
+      // Assuming you test your classifier function directly:
+      // expect(classifyActivity(app, title)).toBe('productivity');
+    });
+  });
+
+  it('correctly classifies leisure applications and websites', () => {
+    const leisureExamples = [
+      { app: 'Steam', title: 'Counter-Strike 2' },
+      { app: 'Google Chrome', title: 'YouTube - LoFi Beats' },
+      { app: 'Discord', title: 'Chatting' }
+    ];
+
+    leisureExamples.forEach(({ app, title }) => {
+      // expect(classifyActivity(app, title)).toBe('leisure');
+    });
+  });
+});
+
+=================================================================
+FILE: src/App.tsx
+=================================================================
+
+import WaterSurface from "./WaterSurface";
+import TerrainHills from "./TerrainHills";
+import TerrariumSky from "./TerrariumSky";
+import SkyBubbles from "./SkyBubbles";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import {
+  BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, Color, ConeGeometry, CylinderGeometry,
+  ExtrudeGeometry, Float32BufferAttribute, IcosahedronGeometry, Matrix4, Shape as ThreeShape, SphereGeometry, TubeGeometry, Vector3,
+} from "three";
+import type { InstancedMesh } from "three";
+import {
+  selectActivity, selectBuildings, selectPlants, selectResidents, useWorldStore,
+} from "./state/worldStore";
+import type { Building, Plant } from "./simulation/types";
+import { getDayPhase } from "./simulation/worldDefaults";
+import { residentOccupiedPlots } from "./simulation/navigation";
+import {
+  BOARD_SIZE, BUILDING_CATALOG, BUILDING_GROWTH_SECONDS, CELL_SIZE,
+  GRID_SIZE, GROWTH_REFRESH_MS, batchParts, buildingDimensions, buildingModel, buildingProgress,
+  cellPoint, clamp01, compose, findFreePlot, findFreePlantSite, growthStage, hasExplicitGrowth,
+  hashId, placeModel, plantModel, residentPoint,
+} from "./edenModels";
+import type { Batch, BuildingVariant, Part, Shape } from "./edenModels";
+import "./App.css";
+import FastForwardControls from "./FastForwardControls";
+import { ActivityStats, BuildingInsights } from "./EdenInsights";
+
+// Unit geometries are shared by every instance, including every plant leaf.
+// Their lifetime is the renderer module's lifetime; individual batches own only
+// their instance buffers and materials, not these shared geometries.
+const GEOMETRIES: Record<Shape, BufferGeometry> = {
+  box: new BoxGeometry(1, 1, 1),
+  sphere: new SphereGeometry(1, 8, 6),
+  leaf: new SphereGeometry(1, 6, 4),
+  foliage: new IcosahedronGeometry(1, 1),
+  // Rotate the unit roof BEFORE stretching it to a rectangular footprint.
+  roof: new ConeGeometry(Math.SQRT1_2, 1, 4).rotateY(Math.PI / 4),
+  gable: createGableGeometry().rotateY(Math.PI / 2),
+  cone: new ConeGeometry(1, 1, 8),
+  cylinder: new CylinderGeometry(1, 1, 1, 12),
+  stem: new CylinderGeometry(0.7, 1, 1, 6),
+  capsule: new CapsuleGeometry(0.07, 0.12, 3, 6),
+};
+
+function createGableGeometry() {
+  // A low, elongated roof with a continuous ridge, matching the cottage forms
+  // in the reference while remaining a shared unit geometry for instancing.
+  const geometry = new BufferGeometry();
+  const triangles = [
+    [-.5,-.5,-.5, .5,-.5,-.5, 0,.5,-.5], [.5,-.5,.5, -.5,-.5,.5, 0,.5,.5],
+    [-.5,-.5,.5, -.5,-.5,-.5, 0,.5,-.5], [-.5,-.5,.5, 0,.5,-.5, 0,.5,.5],
+    [.5,-.5,-.5, .5,-.5,.5, 0,.5,.5], [.5,-.5,-.5, 0,.5,.5, 0,.5,-.5],
+    [-.5,-.5,.5, .5,-.5,.5, .5,-.5,-.5], [-.5,-.5,.5, .5,-.5,-.5, -.5,-.5,-.5],
+  ];
+  geometry.setAttribute("position", new Float32BufferAttribute(triangles.flat(), 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+const TANK_WIDTH = BOARD_SIZE + 2.2;
+const TANK_HEIGHT = BOARD_SIZE * 0.63;
+const TANK_RADIUS = 2.4;
+// The thick soil bed raises the miniature landscape into the enclosure instead
+// of leaving a large unused aquarium-like headspace above a floor-level city.
+const TERRAIN_LIFT = 2;
+// A near-front three-quarter view matches the reference's display-tank framing:
+// the long front pane reads clearly, while enough of the right side remains visible.
+const CAMERA_POSITION: [number, number, number] = [BOARD_SIZE * 0.78, BOARD_SIZE * 1.08, BOARD_SIZE * 1.95];
+const CAMERA_OPTIONS = { position: CAMERA_POSITION, fov: 34, near: 0.1, far: BOARD_SIZE * 8 };
+const DPR_RANGE: [number, number] = [1, 1.25];
+const GL_OPTIONS = { antialias: true, powerPreference: "low-power" as const };
+const ORBIT_TARGET: [number, number, number] = [0, TANK_HEIGHT * 0.36, 0];
+const createRendererId = (type: string) => `${type}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+
+function roundedPerimeter(halfWidth: number, halfDepth: number, radius: number, y: number) {
+  const points: Vector3[] = [];
+  const corners = [
+    { x: halfWidth - radius, z: -halfDepth + radius, from: -90 },
+    { x: halfWidth - radius, z: halfDepth - radius, from: 0 },
+    { x: -halfWidth + radius, z: halfDepth - radius, from: 90 },
+    { x: -halfWidth + radius, z: -halfDepth + radius, from: 180 },
+  ];
+  for (const corner of corners) for (let step = 0; step <= 10; step++) {
+    const angle = (corner.from + step * 9) * Math.PI / 180;
+    points.push(new Vector3(corner.x + Math.cos(angle) * radius, y, corner.z + Math.sin(angle) * radius));
+  }
+  return points;
+}
+
+// Matching rounded corners for soil and glass.
+// The glass bends smoothly underneath the terrarium.
+const BASE_CURVE_RADIUS = 0.7;
+const SOIL_CLEARANCE = 0.32;
+
+function tankInsetAtHeight(height: number) {
+  const h = Math.max(
+    0,
+    Math.min(BASE_CURVE_RADIUS, height)
+  );
+  const dy = BASE_CURVE_RADIUS - h;
+
+  return BASE_CURVE_RADIUS - Math.sqrt(
+    Math.max(0, BASE_CURVE_RADIUS ** 2 - dy ** 2)
+  );
+}
+
+function createTankWallGeometry() {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const contours: Vector3[][] = [];
+  const bottomY = -TERRAIN_LIFT;
+
+  // Generate a quarter-circle transition between the
+  // horizontal glass floor and the vertical glass walls.
+  for (let step = 0; step <= 16; step++) {
+    const angle = step / 16 * Math.PI / 2;
+
+    const height =
+      BASE_CURVE_RADIUS * (1 - Math.cos(angle));
+
+    const inset =
+      BASE_CURVE_RADIUS * (1 - Math.sin(angle));
+
+    contours.push(
+      roundedPerimeter(
+        TANK_WIDTH / 2 - inset,
+        TANK_WIDTH / 2 - inset,
+        TANK_RADIUS - inset,
+        bottomY + height
+      )
+    );
+  }
+
+  // Continue vertically to the open top.
+  contours.push(
+    roundedPerimeter(
+      TANK_WIDTH / 2,
+      TANK_WIDTH / 2,
+      TANK_RADIUS,
+      TANK_HEIGHT
+    )
+  );
+
+  const count = contours[0]!.length;
+
+  for (const outline of contours) {
+    if (outline.length !== count) {
+      throw new Error("Inconsistent tank outline");
+    }
+
+    for (const point of outline) {
+      positions.push(point.x, point.y, point.z);
+    }
+  }
+
+  // Join neighboring contours into a continuous surface.
+  for (let level = 0; level < contours.length - 1; level++) {
+    for (let i = 0; i < count; i++) {
+      const next = (i + 1) % count;
+
+      const a = level * count + i;
+      const b = level * count + next;
+      const c = (level + 1) * count + i;
+      const d = (level + 1) * count + next;
+
+      indices.push(a, c, d, a, d, b);
+    }
+  }
+
+  // Close the underside with transparent glass.
+  // This also prevents an open hole when viewed from below.
+  const center = positions.length / 3;
+  positions.push(0, bottomY, 0);
+
+  for (let i = 0; i < count; i++) {
+    indices.push(center, i, (i + 1) % count);
+  }
+
+  const geometry = new BufferGeometry();
+
+  geometry.setAttribute(
+    "position",
+    new Float32BufferAttribute(positions, 3)
+  );
+
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  return geometry;
+}
+
+function createRoundedGroundShape() {
+  // The soil shares the exact corner centers of the glass.
+  // A small inset ensures the dirt never protrudes outside.
+  const half = TANK_WIDTH / 2 - SOIL_CLEARANCE;
+  const radius = TANK_RADIUS - SOIL_CLEARANCE;
+
+  const shape = new ThreeShape();
+
+  shape.moveTo(-half + radius, -half);
+
+  shape.lineTo(half - radius, -half);
+  shape.quadraticCurveTo(
+    half, -half, half, -half + radius
+  );
+
+  shape.lineTo(half, half - radius);
+  shape.quadraticCurveTo(
+    half, half, half - radius, half
+  );
+
+  shape.lineTo(-half + radius, half);
+  shape.quadraticCurveTo(
+    -half, half, -half, half - radius
+  );
+
+  shape.lineTo(-half, -half + radius);
+  shape.quadraticCurveTo(
+    -half, -half, -half + radius, -half
+  );
+
+  return shape;
+}
+
+// The soil sits above the glass floor while remaining
+// close to the glass walls and below the grass surface.
+const SOIL_GEOMETRY = new ExtrudeGeometry(
+  createRoundedGroundShape(),
+  {
+    depth: TERRAIN_LIFT - 0.46,
+    bevelEnabled: true,
+    bevelSegments: 4,
+    bevelSize: 0.08,
+    bevelThickness: 0.08,
+    steps: 1,
+  }
+).rotateX(-Math.PI / 2);
+
+function TankEnclosure({ night }: { night: boolean }) {
+  const wall = useMemo(() => createTankWallGeometry(), []);
+  const rim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, TANK_HEIGHT), true, "centripetal"), 120, 0.075, 8, true), []);
+  const innerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2 - 0.14, TANK_WIDTH / 2 - 0.14, TANK_RADIUS - 0.12, TANK_HEIGHT - 0.035), true, "centripetal"), 120, 0.035, 8, true), []);
+  const lowerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2 - tankInsetAtHeight(0.08), TANK_WIDTH / 2 - tankInsetAtHeight(0.08), TANK_RADIUS - tankInsetAtHeight(0.08), -TERRAIN_LIFT + 0.08), true, "centripetal"), 120, 0.045, 8, true), []);
+  const frontGlints = useMemo(() => [-1, 1].map(side => new TubeGeometry(new CatmullRomCurve3([
+    new Vector3(side * (TANK_WIDTH / 2 - TANK_RADIUS), 0.25, TANK_WIDTH / 2),
+    new Vector3(side * (TANK_WIDTH / 2 - TANK_RADIUS), TANK_HEIGHT - 0.18, TANK_WIDTH / 2),
+  ], false), 24, 0.035, 6, false)), []);
+  const glintPoints = useMemo(() => {
+    const outline = roundedPerimeter(TANK_WIDTH / 2 + 0.005, TANK_WIDTH / 2 + 0.005, TANK_RADIUS, 0);
+    return [outline.slice(0, 10), outline.slice(22, 32)].map(points => new TubeGeometry(new CatmullRomCurve3(points, false, "centripetal"), 32, 0.035, 6, false));
+  }, []);
+  return <group>
+    <mesh geometry={wall} renderOrder={4}>
+      <meshPhysicalMaterial color={night ? "#8aeafa" : "#b5f5fb"} transparent opacity={night ? 0.2 : 0.18} roughness={0.08} metalness={0} transmission={0.1} thickness={0.24} ior={1.33} side={2} depthWrite={false} />
+    </mesh>
+    <mesh geometry={rim} renderOrder={6}><meshStandardMaterial color="#ecffff" roughness={0.12} metalness={0.05} emissive="#75f2ff" emissiveIntensity={night ? 0.34 : 0.18} /></mesh>
+    <mesh geometry={innerRim} renderOrder={6}><meshStandardMaterial color="#bdffff" roughness={0.08} metalness={0.06} emissive="#5adff0" emissiveIntensity={0.16} /></mesh>
+    <mesh geometry={lowerRim} renderOrder={6}><meshStandardMaterial color="#a6f7ff" roughness={0.16} metalness={0.08} emissive="#41d9ee" emissiveIntensity={0.18} /></mesh>
+    {glintPoints.map((geometry, index) => <mesh key={index} geometry={geometry} renderOrder={7}><meshBasicMaterial color="#ffffff" transparent opacity={0.68} /></mesh>)}
+    {frontGlints.map((geometry, index) => <mesh key={`front-${index}`} geometry={geometry} renderOrder={7}><meshBasicMaterial color="#f3ffff" transparent opacity={0.44} /></mesh>)}
+  </group>;
+}
+
+function waterRandom(seed: number) {
+  let state = seed >>> 0;
+
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function WaterCourse({ seed }: { seed: number }) {
+  const layout = useMemo(() => {
+    const random = waterRandom(seed);
+    const range = (min: number, max: number) =>
+      min + random() * (max - min);
+
+    const edge = BOARD_SIZE * 0.46;
+    const riverPositions: number[] = [];
+
+    // Randomized winding river.
+    const startX = range(-BOARD_SIZE * 0.17, BOARD_SIZE * 0.17);
+    const endX = range(-BOARD_SIZE * 0.17, BOARD_SIZE * 0.17);
+    const bend1 = range(-BOARD_SIZE * 0.13, BOARD_SIZE * 0.13);
+    const bend2 = range(-BOARD_SIZE * 0.07, BOARD_SIZE * 0.07);
+    const phase = range(0, Math.PI * 2);
+    const width = range(0.42, 0.78);
+
+    const riverPoint = (t: number) => {
+      const z = -edge + t * edge * 2;
+
+      const rawX =
+        startX * (1 - t) +
+        endX * t +
+        Math.sin(t * Math.PI * 2 + phase) * bend1 +
+        Math.sin(t * Math.PI * 4 + phase * 0.6) * bend2;
+
+      const w = width *
+        (1 + 0.18 * Math.sin(t * Math.PI * 5 + phase));
+
+      const x = Math.max(
+        -edge + w,
+        Math.min(edge - w, rawX)
+      );
+
+      return { x, z, w };
+    };
+
+    const steps = 100;
+
+    for (let i = 0; i < steps; i++) {
+      const a = riverPoint(i / steps);
+      const b = riverPoint((i + 1) / steps);
+
+      riverPositions.push(
+        a.x - a.w, 0.065, a.z,
+        b.x - b.w, 0.065, b.z,
+        a.x + a.w, 0.065, a.z,
+
+        a.x + a.w, 0.065, a.z,
+        b.x - b.w, 0.065, b.z,
+        b.x + b.w, 0.065, b.z
+      );
+    }
+
+    const river = new BufferGeometry();
+    river.setAttribute(
+      "position",
+      new Float32BufferAttribute(riverPositions, 3)
+    );
+    river.computeVertexNormals();
+
+    // Organic shoreline geometry for lakes and ponds.
+    const makeWaterBody = (
+      x: number,
+      z: number,
+      radiusX: number,
+      radiusZ: number
+    ) => {
+      const positions: number[] = [];
+      const segments = 72;
+      const phase1 = range(0, Math.PI * 2);
+      const phase2 = range(0, Math.PI * 2);
+      const wobble = range(0.06, 0.13);
+
+      const point = (angle: number) => {
+        const variation =
+          1 +
+          wobble * Math.sin(angle * 3 + phase1) +
+          wobble * 0.45 * Math.cos(angle * 5 + phase2);
+
+        return [
+          x + Math.cos(angle) * radiusX * variation,
+          0.078,
+          z + Math.sin(angle) * radiusZ * variation
+        ];
+      };
+
+      for (let i = 0; i < segments; i++) {
+        const a = i / segments * Math.PI * 2;
+        const b = (i + 1) / segments * Math.PI * 2;
+
+        positions.push(
+          x, 0.078, z,
+          ...point(b),
+          ...point(a)
+        );
+      }
+
+      const geometry = new BufferGeometry();
+      geometry.setAttribute(
+        "position",
+        new Float32BufferAttribute(positions, 3)
+      );
+      geometry.computeVertexNormals();
+
+      return geometry;
+    };
+
+    // Put the lake and pond on opposite sides of the river.
+    const lakeSide = random() < 0.5 ? -1 : 1;
+
+    const lakeRadiusX = range(1.8, 3.1);
+    const lakeRadiusZ = range(1.4, 2.5);
+
+    const lakeX = lakeSide *
+      range(BOARD_SIZE * 0.20, BOARD_SIZE * 0.29);
+    const lakeZ = range(
+      -BOARD_SIZE * 0.25,
+      BOARD_SIZE * 0.25
+    );
+
+    const pondRadiusX = range(2.0, 3.8);
+    const pondRadiusZ = range(1.7, 3.2);
+
+    const pondX = -lakeSide *
+      range(BOARD_SIZE * 0.20, BOARD_SIZE * 0.30);
+    const pondZ = range(
+      -BOARD_SIZE * 0.30,
+      BOARD_SIZE * 0.30
+    );
+
+
+    const pond = makeWaterBody(
+      pondX, pondZ, pondRadiusX, pondRadiusZ
+    );
+
+    return { river, pond };
+  }, [seed]);
+
+  useEffect(() => {
+    return () => {
+      layout.river.dispose();
+      
+      layout.pond.dispose();
+    };
+  }, [layout]);
+
+  return (
+    <group>
+      <mesh geometry={layout.river} receiveShadow>
+        <WaterSurface kind="river" />
+      </mesh>
+
+      
+
+      <mesh geometry={layout.pond} receiveShadow>
+        <WaterSurface kind="pond" />
+      </mesh>
+    </group>
+  );
+}
+
+function MossBanks({ night }: { night: boolean }) {
+  const ref = useRef<InstancedMesh>(null);
+  const invalidate = useThree(state => state.invalidate);
+  const geometry = useMemo(() => new SphereGeometry(1, 12, 8), []);
+  const patches = useMemo(() => Array.from({ length: 176 }, (_, index) => {
+    const angle = index / 136 * Math.PI * 2;
+    const cosine = Math.cos(angle), sine = Math.sin(angle);
+    const edge = (BOARD_SIZE * (0.41 + ((index * 17) % 10) / 100)) / Math.max(Math.abs(cosine), Math.abs(sine));
+    if (index >= 136) {
+      const waterAngle = (index - 136) / 40 * Math.PI * 2;
+      return { x: 6 + Math.cos(waterAngle) * (3.7 + (index % 3) * 0.16), z: BOARD_SIZE * 0.29 + Math.sin(waterAngle) * (2.15 + (index % 4) * 0.13), sx: 0.62 + index % 3 * 0.12, sz: 0.57 + index % 4 * 0.1, color: index % 2 };
+    }
+    return { x: cosine * edge, z: sine * edge, sx: 0.74 + (index * 7 % 9) * 0.105, sz: 0.72 + (index * 5 % 8) * 0.11, color: index % 4 };
+  }), []);
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const matrix = new Matrix4();
+    const colors = ["#47b85b", "#55c564", "#68ce69", "#3da857"];
+    patches.forEach((patch, index) => {
+      matrix.makeScale(patch.sx, 0.13 + index % 3 * 0.018, patch.sz).setPosition(patch.x, 0.075, patch.z);
+      mesh.setMatrixAt(index, matrix);
+      mesh.setColorAt(index, new Color(colors[patch.color]!));
+    });
+    mesh.count = patches.length;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    invalidate();
+  }, [patches, invalidate]);
+  return <instancedMesh ref={ref} args={[geometry, undefined, patches.length]} receiveShadow>
+    <meshStandardMaterial color={night ? "#c0e4c9" : "#ffffff"} roughness={0.88} />
+  </instancedMesh>;
+}
+const PANEL_STYLE: CSSProperties = {
+  position: "absolute", top: 12, left: 12, zIndex: 10,
+  display: "flex", flexDirection: "column", gap: 8, width: 224,
+  maxHeight: "calc(100vh - 24px)", overflowY: "auto",
+  padding: 12, borderRadius: 14, boxSizing: "border-box",
+  background: "rgba(12, 40, 45, 0.9)", color: "#e8f5df",
+  border: "1px solid rgba(190, 230, 204, 0.3)", fontSize: 12,
+};
+const CONTROL_STYLE: CSSProperties = {
+  borderRadius: 7, border: "1px solid #779e8b", padding: "7px 9px",
+  background: "#dcebd8", color: "#183e38", font: "inherit",
+};
+
+/** A single draw batch for one geometry/material combination. */
+const InstanceBatch = memo(function InstanceBatch({
+  batch, night, owners, onSelectBuilding,
+}: {
+  batch: Batch;
+  night: boolean;
+  owners?: string[];
+  onSelectBuilding?: (id: string) => void;
+}) {
+  const meshRef = useRef<InstancedMesh>(null);
+  const invalidate = useThree(state => state.invalidate);
+  // Spare capacity limits GPU buffer recreation as new objects are added.
+  const capacity = Math.max(16, 2 ** Math.ceil(Math.log2(Math.max(1, batch.parts.length))));
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const matrix = new Matrix4();
+    const color = new Color();
+    mesh.count = batch.parts.length;
+    batch.parts.forEach((part, index) => {
+      mesh.setMatrixAt(index, matrix.fromArray(part.matrix));
+      mesh.setColorAt(index, color.set(part.color));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // Includes distant plots after additions, movement, or growth.
+    mesh.computeBoundingSphere();
+    mesh.computeBoundingBox();
+    invalidate();
+  }, [batch.parts, capacity, invalidate]);
+
+  const glass = batch.finish === "glass";
+  const greenhouse = batch.finish === "greenhouse";
+  const solar = batch.finish === "solar";
+  const metal = batch.finish === "metal";
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[GEOMETRIES[batch.shape], undefined, capacity]}
+      onClick={owners && onSelectBuilding ? event => {
+        if (event.button !== 0 || event.delta > 5) return;
+        const id = owners[event.instanceId ?? -1];
+        if (!id) return;
+        event.stopPropagation();
+        onSelectBuilding(id);
+      } : undefined}
+      onPointerOver={owners ? () => { document.body.style.cursor = 'pointer'; } : undefined}
+      onPointerOut={owners ? () => { document.body.style.cursor = ''; } : undefined}
+      castShadow
+      receiveShadow
+    >
+      <meshPhysicalMaterial
+        color="#ffffff"
+        transparent={glass || greenhouse}
+        opacity={glass ? 0.4 : greenhouse ? 0.18 : 1}
+        depthWrite={!glass && !greenhouse}
+        side={2}
+        roughness={glass || greenhouse ? 0.12 : solar ? 0.2 : metal ? 0.32 : 0.78}
+        metalness={glass || greenhouse ? 0.04 : solar ? 0.3 : metal ? 0.36 : 0}
+        emissive={glass ? "#fff0ab" : greenhouse ? "#8af5df" : "#000000"}
+        emissiveIntensity={glass ? (night ? 0.58 : 0.16) : greenhouse ? (night ? 0.12 : 0.045) : 0}
+        clearcoat={glass || greenhouse ? 0.7 : solar ? 0.9 : 0.12}
+        clearcoatRoughness={glass || greenhouse ? 0.06 : solar ? 0.12 : 0.32}
+        flatShading={!glass && !greenhouse && !metal}
+      />
+    </instancedMesh>
+  );
+});
+
+function BatchLayer({ batches, night }: { batches: Batch[]; night: boolean }) {
+  return <>{batches.map(batch => <InstanceBatch key={batch.key} batch={batch} night={night} />)}</>;
+}
+
+/** Store growth overrides age-based growth if the simulation supplies it. */
+function BuildingsLayer({ night, onSelectBuilding }: { night: boolean; onSelectBuilding: (id: string) => void }) {
+  const buildings = useWorldStore(selectBuildings);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const growing = buildings.filter(item => !hasExplicitGrowth(item) && buildingProgress(item, Date.now()) < 1);
+    if (growing.length === 0) return;
+    const timer = window.setInterval(() => {
+      const next = Date.now();
+      setNow(next);
+      if (growing.every(item => buildingProgress(item, next) >= 1)) window.clearInterval(timer);
+    }, GROWTH_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [buildings]);
+
+  const { batches, ownerByBatch } = useMemo(() => {
+    const parts: Part[] = [];
+    const ownerByPart: string[] = [];
+    for (const item of buildings) {
+      const firstPart = parts.length;
+      const at = cellPoint(
+        item.gridPosition.x + (item.footprint.width - 1) / 2,
+        item.gridPosition.z + (item.footprint.depth - 1) / 2,
+      );
+      // Footprints are occupied grid dimensions. A quarter-turn swaps the local
+      // dimensions so a rectangular building still fits its recorded plot.
+      const { width, depth } = buildingDimensions(item.footprint, item.rotation);
+      const progress = buildingProgress(item, now);
+      const stage = growthStage(progress);
+      const model = buildingModel(item.variantId, width, depth, stage, hashId(item.id), item.floors, item.moss);
+      // Horizontal size stays fixed so growth cannot consume neighboring plots.
+      const buildingVariation = 0.75 + (hashId(item.id) % 100) / 100 * 0.8;
+    const root = compose(
+      [at.x, 0, at.z],
+      [0, item.rotation, 0],
+      [1, (0.65 + progress * 0.35) * buildingVariation, 1]
+    );
+      placeModel(model, root, parts);
+
+      // Climbing vines and leaves appear as moss increases.
+      const moss = Math.max(0, Math.min(1, item.moss ?? 0));
+
+      if (moss > 0.05) {
+        const height = (item.floors ?? 1) * 0.55 + 0.5;
+        const vineCount = Math.ceil(moss * 12);
+
+        for (let i = 0; i < vineCount; i++) {
+          const side = i % 4;
+          const fraction = ((i * 7) % 11) / 11 - 0.5;
+
+          const localX =
+            side < 2
+              ? fraction * width * 0.85
+              : (side === 2 ? -1 : 1) * width * 0.46;
+
+          const localZ =
+            side < 2
+              ? (side === 0 ? -1 : 1) * depth * 0.46
+              : fraction * depth * 0.85;
+
+          const angle = item.rotation;
+
+          const x =
+            at.x +
+            localX * Math.cos(angle) +
+            localZ * Math.sin(angle);
+
+          const z =
+            at.z -
+            localX * Math.sin(angle) +
+            localZ * Math.cos(angle);
+
+          const vineHeight =
+            height * moss * (0.5 + (i % 4) * 0.12);
+
+          parts.push({
+            shape: "stem",
+            finish: "matte",
+            color: i % 3 === 0 ? "#397b3c" : "#4d9b4a",
+            matrix: compose(
+              [x, vineHeight / 2, z],
+              [0, 0, 0],
+              [
+                0.035 + moss * 0.035,
+                vineHeight,
+                0.035 + moss * 0.035,
+              ]
+            ),
+          });
+
+          const leafCount = Math.ceil(moss * 6);
+
+          for (let j = 0; j < leafCount; j++) {
+            const leafY =
+              ((j + 1) / (leafCount + 1)) * vineHeight;
+
+            parts.push({
+              shape: "leaf",
+              finish: "matte",
+              color: j % 2 === 0 ? "#56a94c" : "#7bc768",
+              matrix: compose(
+                [
+                  x + (j % 2 === 0 ? -0.06 : 0.06),
+                  leafY,
+                  z,
+                ],
+                [0, 0, j % 2 === 0 ? -0.5 : 0.5],
+                [
+                  0.09 + moss * 0.06,
+                  0.045 + moss * 0.035,
+                  0.065,
+                ]
+              ),
+            });
+          }
+        }
+      }
+
+      // Parts appended by this building (including moss/vines) share its ID.
+      for (let i = firstPart; i < parts.length; i++) ownerByPart.push(item.id);
+    }
+    const ownerByBatch = new Map<string, string[]>();
+    parts.forEach((part, index) => {
+      const key = `${part.shape}:${part.finish}`;
+      let list = ownerByBatch.get(key);
+      if (!list) { list = []; ownerByBatch.set(key, list); }
+      list.push(ownerByPart[index]!);
+    });
+    return { batches: batchParts(parts), ownerByBatch };
+  }, [buildings, now]);
+
+  return <>{batches.map(batch => <InstanceBatch
+    key={batch.key}
+    batch={batch}
+    night={night}
+    owners={ownerByBatch.get(batch.key)}
+    onSelectBuilding={onSelectBuilding}
+  />)}</>;
+}
+
+function PlantsLayer({ night }: { night: boolean }) {
+  const plants = useWorldStore(selectPlants);
+  const batches = useMemo(() => {
+    const parts: Part[] = [];
+    for (const item of plants) {
+      const at = cellPoint(item.gridPosition.x, item.gridPosition.z);
+      const seed = hashId(item.id);
+      const speciesScale = item.species === "tree" ? 2.2 : item.species === "shrub" ? 1.6 : 1.35;
+      const growth = Math.max(0, Math.min(3, item.growth));
+
+    const natureMultiplier =
+      item.species === "tree" ? 1.65 :
+      item.species === "shrub" ? 1.4 :
+      item.species === "fern" ? 1.35 :
+      item.species === "flower" ? 1.5 :
+      1.25;
+
+    const individualSize = 0.7 + (seed % 100) / 100 * 0.9;
+
+    const scale =
+      (0.25 + growth * 0.65) *
+      individualSize *
+      (CELL_SIZE / 1.5) *
+      speciesScale *
+      natureMultiplier;
+      const root = compose([at.x, 0, at.z], [0, seed % 360 * Math.PI / 180, 0], [scale, scale, scale]);
+      placeModel(plantModel(item.species, seed), root, parts);
+    }
+    return batchParts(parts);
+  }, [plants]);
+  return <BatchLayer batches={batches} night={night} />;
+}
+
+function ResidentsLayer({ night }: { night: boolean }) {
+  const residents = useWorldStore(selectResidents);
+  const batches = useMemo(() => {
+    const parts: Part[] = [];
+    for (const item of residents) {
+      if (item.activity === "resting") continue;
+      const at = residentPoint(item.position.x, item.position.z);
+      parts.push({ shape: "capsule", finish: "matte", color: "#9b9d98", matrix: compose([at.x, 0.13, at.z]) });
+    }
+    return batchParts(parts);
+  }, [residents]);
+  return <BatchLayer batches={batches} night={night} />;
+}
+
+function useNight() {
+  const simulationTime = useWorldStore(state => state.world.simulationTime);
+  return getDayPhase(simulationTime) === "night";
+}
+
+const World = memo(function World({ showGrid, shadows, onSelectBuilding }: { showGrid: boolean; shadows: boolean; onSelectBuilding: (id: string) => void }) {
+  const night = useNight();
+  const weather = useWorldStore(state => state.world.weather);
+  const waterSeed = useWorldStore(state => state.world.waterSeed ?? 1);
+  const simulationTime = useWorldStore(state => state.world.simulationTime);
+  const phase = getDayPhase(simulationTime);
+  const sky = weather.condition === "rainy" ? (night ? "#263c4a" : "#d7e5dc") : weather.condition === "cloudy" ? (night ? "#263f4a" : "#d3e9e7") : phase === "sunset" ? "#ffd6a2" : (night ? "#102b36" : "#bceaf1");
+  return (
+    <>
+      <color attach="background" args={[sky]} />
+      {/* Start beyond the map at the default view; avoids washing out buildings. */}
+      <fog attach="fog" args={[sky, BOARD_SIZE * 3.5, BOARD_SIZE * 6]} />
+      <hemisphereLight args={[night ? "#82d6ff" : "#f5ffff", night ? "#184b55" : "#63c579", night ? 0.7 : 0.82]} />
+      <ambientLight intensity={weather.condition === "rainy" ? 0.58 : weather.condition === "cloudy" ? 0.82 : night ? 0.7 : 1.02} color={night ? "#83b5dc" : "#eaffff"} />
+      <directionalLight
+        position={[-BOARD_SIZE * 0.6, BOARD_SIZE, BOARD_SIZE * 0.6]}
+        intensity={weather.condition === "rainy" ? 0.72 : weather.condition === "cloudy" ? 1.25 : phase === "sunset" ? 1.55 : night ? 0.65 : 2.25}
+        color={night ? "#9bc7ff" : phase === "sunset" ? "#ffe0b5" : "#ffffff"}
+        castShadow={shadows}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-camera-left={-BOARD_SIZE * 0.75}
+        shadow-camera-right={BOARD_SIZE * 0.75}
+        shadow-camera-top={BOARD_SIZE * 0.75}
+        shadow-camera-bottom={-BOARD_SIZE * 0.75}
+        shadow-camera-near={0.5}
+        shadow-camera-far={BOARD_SIZE * 4}
+        shadow-normalBias={0.03}
+      />
+      <group position={[0, TERRAIN_LIFT, 0]}>
+      <mesh position={[0, -TERRAIN_LIFT + 0.38, 0]} receiveShadow castShadow geometry={SOIL_GEOMETRY}>
+        <meshStandardMaterial color={night ? "#4a3429" : "#573722"} roughness={0.96} />
+      </mesh>
+      <MossBanks night={night} />
+      <TerrainHills seed={waterSeed} night={night} />
+      <WaterCourse seed={waterSeed} />
+      {showGrid && <gridHelper args={[BOARD_SIZE, GRID_SIZE, night ? "#5e9c96" : "#b4e2cc", night ? "#376c6d" : "#8bc8ae"]} position={[0, 0.04, 0]} />}
+      <TankEnclosure night={night} />
+      {weather.condition === "cloudy" && Array.from({ length: 5 }, (_, index) => (
+        <group key={`cloud-${index}`} position={[(index - 2) * BOARD_SIZE * 0.13, BOARD_SIZE * (0.34 + index % 2 * 0.035), ((index * 7) % 5 - 2) * BOARD_SIZE * 0.12]}>
+          <mesh><sphereGeometry args={[BOARD_SIZE * 0.055, 8, 6]} /><meshBasicMaterial color="#f5fffb" transparent opacity={0.2} depthWrite={false} /></mesh>
+          <mesh position={[BOARD_SIZE * 0.045, -BOARD_SIZE * 0.008, BOARD_SIZE * 0.01]}><sphereGeometry args={[BOARD_SIZE * 0.045, 8, 6]} /><meshBasicMaterial color="#f5fffb" transparent opacity={0.18} depthWrite={false} /></mesh>
+        </group>
+      ))}
+      {weather.condition === "rainy" && Array.from({ length: 42 }, (_, index) => {
+        const elapsed = Math.floor(simulationTime * 3);
+        const x = ((index * 23 + elapsed * 7) % 100) / 100 * BOARD_SIZE - BOARD_SIZE / 2;
+        const z = ((index * 41 + elapsed * 11) % 100) / 100 * BOARD_SIZE - BOARD_SIZE / 2;
+        const y = 0.5 + ((index * 13 + elapsed * 29) % 100) / 100 * BOARD_SIZE * 0.48;
+        return <mesh key={index} position={[x, y, z]} rotation={[0.12, 0, 0.08]}><cylinderGeometry args={[0.012, 0.012, 0.32, 4]} /><meshBasicMaterial color="#c7f4f1" transparent opacity={0.65} /></mesh>;
+      })}
+      <BuildingsLayer night={night} onSelectBuilding={onSelectBuilding} />
+      <PlantsLayer night={night} />
+      <ResidentsLayer night={night} />
+      </group>
+      <OrbitControls
+        enablePan
+        minDistance={CELL_SIZE * 4}
+        maxDistance={BOARD_SIZE * 3}
+        maxPolarAngle={Math.PI / 2.15}
+        target={ORBIT_TARGET}
+      />
+    </>
+  );
+});
+
+function App() {
+    const setSystemIdle = useWorldStore(
+    (state) => state.setSystemIdle
+  );
+    // Simulation timer and activity tracking
+  const advanceTime = useWorldStore(state => state.advanceTime);
+  const recordInput = useWorldStore(state => state.recordInput);
+  const setActivityCategory = useWorldStore(state => state.setActivityCategory);
+  const addBuilding = useWorldStore(state => state.addBuilding);
+  const addPlant = useWorldStore(state => state.addPlant);
+  const resetWorld = useWorldStore(state => state.resetWorld);
+
+useEffect(() => {
+    const api = window.edenAPI;
+
+    if (!api) return;
+
+    let mounted = true;
+    let latestTimestamp = -Infinity;
+
+    const handleActivity = (activity: {
+      status: "active" | "idle";
+      category?: "productivity" | "leisure" | "idle";
+      timestamp: number;
+    }) => {
+      if (!mounted || activity.timestamp < latestTimestamp) return;
+
+      latestTimestamp = activity.timestamp;
+      setSystemIdle(activity.status === "idle");
+
+      if (activity.category && activity.status !== "idle") {
+        setActivityCategory(activity.category);
+      }
+    };
+
+    const unsubscribe = api.onActivityChanged(handleActivity);
+
+    api.getCurrentActivity()
+      .then((activity) => {
+        if (activity) handleActivity(activity);
+      })
+      .catch(console.error);
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [setSystemIdle, setActivityCategory]); // <-- Include both here
+
+
+  // Primitive subscriptions keep the toolbar out of world movement/growth updates.
+  const buildingCount = useWorldStore(state => selectBuildings(state).length);
+  const plantCount = useWorldStore(state => selectPlants(state).length);
+  const worldActivity = useWorldStore(selectActivity);
+  const weather = useWorldStore(state => state.world.weather);
+  const simulationTime = useWorldStore(state => state.world.simulationTime);
+  const [variant, setVariant] = useState<BuildingVariant>("solar-house");
+  const [plantType, setPlantType] = useState<Plant["species"]>("tree");
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [windowHovered, setWindowHovered] = useState(false);
+  const [showGrid, setShowGrid] = useState(false);
+  const [shadows, setShadows] = useState(true);
+  const [notice, setNotice] = useState("");
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let previous = Date.now();
+    let lastInput = 0;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      advanceTime(Math.max(0, now - previous) / 1_000, now);
+      previous = now;
+    }, 1_000);
+    const onInput = (event: Event) => {
+      const target = event.target;
+      const editing = target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input, textarea, select"));
+      if (!editing && event instanceof KeyboardEvent && event.altKey && ["Digit1", "Digit2", "Digit3"].includes(event.code)) {
+        event.preventDefault();
+        recordInput();
+        setActivityCategory(event.code === "Digit1" ? "productivity" : event.code === "Digit2" ? "leisure" : "idle");
+        return;
+      }
+      // Wheel events can arrive dozens of times per second.
+      const now = Date.now();
+      // Only track window input when running in a browser.
+      // Electron already tracks activity across the entire Mac.
+      if (!window.edenAPI) {
+        if (now - lastInput >= 200) { recordInput(); lastInput = now; }
+      }
+    };
+    window.addEventListener("pointerdown", onInput, { passive: true });
+    window.addEventListener("keydown", onInput);
+    window.addEventListener("wheel", onInput, { passive: true });
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pointerdown", onInput);
+      window.removeEventListener("keydown", onInput);
+      window.removeEventListener("wheel", onInput);
+    };
+  }, [advanceTime, recordInput, setActivityCategory]);
+  
+  function handleAddBuilding() {
+    const config = BUILDING_CATALOG.find(entry => entry.id === variant)!;
+    // Read current state at click time, including rapid successive additions.
+    const state = useWorldStore.getState();
+    const residents = residentOccupiedPlots(selectResidents(state));
+    const plot = findFreePlot([...selectBuildings(state), ...residents], selectPlants(state), config.width, config.depth);
+    if (!plot) { setNotice(`No empty ${config.width}×${config.depth} plot remains.`); return; }
+    const item: Building = {
+      type: "building", id: createRendererId("building"), variantId: config.id, name: config.name,
+      gridPosition: plot, footprint: { width: config.width, depth: config.depth },
+      rotation: 0, createdAt: Date.now(),
+    };
+    try {
+      addBuilding(item);
+      const accepted = selectBuildings(useWorldStore.getState()).some(building => building.id === item.id);
+      setNotice(accepted ? `${config.name} added. It grows over ${BUILDING_GROWTH_SECONDS / 60} minutes.` : "The store rejected this building. Update its grid limits and variant catalog.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The building could not be added.");
+    }
+  }
+
+  function handleAddPlant() {
+    const state = useWorldStore.getState();
+    const residents = residentOccupiedPlots(selectResidents(state));
+    const position = findFreePlantSite([...selectBuildings(state), ...selectPlants(state), ...residents]);
+    if (!position) { setNotice("No suitable planting space remains."); return; }
+    addPlant({ type: "plant", id: createRendererId("plant"), species: plantType, variantId: plantType, gridPosition: position, growth: 0.9, createdAt: Date.now() });
+    setNotice(`${plantType} added.`);
+  }
+
+  return (
+    <main
+      className="app"
+      style={{ position: "relative", width: "100vw", height: "100vh" }}
+      onPointerEnter={() => setWindowHovered(true)}
+      onPointerLeave={() => setWindowHovered(false)}
+    >
+      <Canvas
+        shadows={shadows}
+        frameloop="always"
+        camera={CAMERA_OPTIONS}
+        dpr={DPR_RANGE}
+        gl={GL_OPTIONS}
+      >
+        <TerrariumSky />
+        <SkyBubbles />
+        <World showGrid={showGrid} shadows={shadows} onSelectBuilding={setSelectedBuildingId} />
+      </Canvas>
+      <div style={{
+        ...PANEL_STYLE,
+        position: "absolute",
+        top: 40,
+        right: "auto",
+        bottom: "auto",
+        left: 18,
+        zIndex: 100,
+        display: windowHovered || panelOpen ? "flex" : "none",
+        flexDirection: "column-reverse",
+        gap: 8,
+        maxHeight: "calc(100vh - 36px)",
+        overflowY: "auto",
+        ...(panelOpen ? {} : { width: "auto", padding: 7 }),
+      }}>
+        <button type="button" style={CONTROL_STYLE} onClick={() => setPanelOpen(open => !open)} aria-expanded={panelOpen} aria-controls="eden-building-panel">
+          {panelOpen ? "Close controls" : "Build"}
+        </button>
+        {panelOpen && <div id="eden-building-panel" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <strong>{GRID_SIZE}×{GRID_SIZE} map · {buildingCount} buildings · {plantCount} plants</strong>
+          <small>Productivity {worldActivity.productivityPoints.toFixed(1)} · Leisure {worldActivity.leisurePoints.toFixed(1)} · Idle {worldActivity.idlePoints.toFixed(1)} points</small>
+          <small>{weather.condition} · {getDayPhase(simulationTime)} · 10 minute cycle</small>
+          <label htmlFor="eden-building-type">Building type</label>
+          <select id="eden-building-type" value={variant} onChange={event => setVariant(event.target.value as BuildingVariant)} style={CONTROL_STYLE}>
+            {BUILDING_CATALOG.map(entry => <option key={entry.id} value={entry.id}>{entry.name} · {entry.width}×{entry.depth}</option>)}
+          </select>
+          <button type="button" onClick={handleAddBuilding} style={CONTROL_STYLE}>Add building</button>
+          <label htmlFor="eden-plant-type">Plant type</label>
+          <select id="eden-plant-type" value={plantType} onChange={event => setPlantType(event.target.value as Plant["species"])} style={CONTROL_STYLE}>
+            {["tree", "shrub", "fern", "flower", "grass"].map(type => <option key={type} value={type}>{type}</option>)}
+          </select>
+          <button type="button" onClick={handleAddPlant} style={CONTROL_STYLE}>Add plant</button>
+          <FastForwardControls />
+          <label><input type="checkbox" checked={showGrid} onChange={event => setShowGrid(event.target.checked)} /> Show grid</label>
+          <label><input type="checkbox" checked={shadows} onChange={event => setShadows(event.target.checked)} /> Shadows</label>
+          <button type="button" style={CONTROL_STYLE} onClick={() => {
+            if (window.confirm("Reset the entire world?")) { resetWorld(); setNotice("World reset."); }
+          }}>Reset world</button>
+          <small>New buildings grow through starter, expanded, and mature stages.</small>
+          <span role="status" style={{ lineHeight: 1.4 }}>{notice}</span>
+        </div>}
+      </div>
+      <div className="wordmark">EDEN<span>.EXE</span></div>
+      <BuildingInsights buildingId={selectedBuildingId} onClose={() => setSelectedBuildingId(null)} />
+      <ActivityStats />
+    </main>
+  );
+}
+
+export default App;
+
+=================================================================
+FILE: electron/main.cjs
+=================================================================
+
+const {
+  app,
+  BrowserWindow,
+  screen,
+  ipcMain,
+} = require("electron");
+
+const { createActivityMonitor } = require("./activityMonitor.cjs");
+
+const path = require("node:path");
+const fs = require("node:fs/promises");
+
+let mainWindow;
+let titlebarWindow;
+
+const BAR_HEIGHT = 32;
+const HOVER_INTERVAL = 100;
+const HIDE_DELAY = 250;
+
+let hoverTimer;
+let hideTimer;
+let currentPlacement = "above";
+let quitting = false;
+
+// --------------------------------------------------
+// World persistence
+// --------------------------------------------------
+
+function getWorldSavePath() {
+  return path.join(app.getPath("userData"), "world.json");
+}
+
+ipcMain.handle("world:load", async () => {
+  try {
+    const contents = await fs.readFile(getWorldSavePath(), "utf8");
+    return JSON.parse(contents);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
+});
+
+ipcMain.handle("world:save", async (_event, world) => {
+  const savePath = getWorldSavePath();
+  const temporaryPath = `${savePath}.tmp`;
+
+  await fs.writeFile(
+    temporaryPath,
+    JSON.stringify(world, null, 2),
+    "utf8",
+  );
+
+  await fs.rename(temporaryPath, savePath);
+
+  return true;
+});
+
+// --------------------------------------------------
+// Activity monitoring and IPC
+// --------------------------------------------------
+
+// Stores the latest system-wide activity status.
+// Example:
+// {
+//   status: "active",
+//   idleSeconds: 0,
+//   timestamp: 1720000000000
+// }
+
+let latestActivity = null;
+
+// Receives activity changes from activityMonitor.cjs.
+const activityMonitor = createActivityMonitor((activity) => {
+  latestActivity = activity;
+
+  console.log("[EDEN Activity]", activity);
+
+  // Send the updated activity to the React renderer.
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isDestroyed()
+  ) {
+    mainWindow.webContents.send(
+      "activity:changed",
+      activity,
+    );
+  }
+});
+
+// Allows React to request the current activity status
+// when the window first loads or reloads.
+ipcMain.handle("activity:get-current", (event) => {
+  if (
+    !mainWindow ||
+    event.sender !== mainWindow.webContents
+  ) {
+    return null;
+  }
+
+  return latestActivity;
+});
+
+// --------------------------------------------------
+// Title bar positioning
+// --------------------------------------------------
+
+function getTitlebarBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return null;
+  }
+
+  const bounds = mainWindow.getBounds();
+
+  return {
+    bounds: {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: BAR_HEIGHT,
+    },
+    placement: "above",
+  };
+}
+
+function syncTitlebarPosition() {
+  if (!titlebarWindow || titlebarWindow.isDestroyed()) {
+    return false;
+  }
+
+  const result = getTitlebarBounds();
+
+  if (!result) {
+    titlebarWindow.hide();
+    return false;
+  }
+
+  titlebarWindow.setBounds(result.bounds);
+
+  if (currentPlacement !== result.placement) {
+    currentPlacement = result.placement;
+
+    titlebarWindow.webContents.send(
+      "titlebar:placement",
+      currentPlacement,
+    );
+  }
+
+  return true;
+}
+
+// --------------------------------------------------
+// Hover detection
+// --------------------------------------------------
+
+function pointInside(bounds, point) {
+  return (
+    point.x >= bounds.x &&
+    point.x < bounds.x + bounds.width &&
+    point.y >= bounds.y &&
+    point.y < bounds.y + bounds.height
+  );
+}
+
+function stopHoverMonitoring() {
+  if (hoverTimer) {
+    clearInterval(hoverTimer);
+    hoverTimer = null;
+  }
+
+  if (hideTimer) {
+    clearTimeout(hideTimer);
+    hideTimer = null;
+  }
+}
+
+function startHoverMonitoring() {
+  stopHoverMonitoring();
+
+  hoverTimer = setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    if (!titlebarWindow || titlebarWindow.isDestroyed()) {
+      return;
+    }
+
+    if (
+      !mainWindow.isVisible() ||
+      mainWindow.isMinimized() ||
+      mainWindow.isFullScreen()
+    ) {
+      titlebarWindow.hide();
+      return;
+    }
+
+    const cursor = screen.getCursorScreenPoint();
+
+    const overMain = pointInside(
+      mainWindow.getBounds(),
+      cursor,
+    );
+
+    const overTitlebar =
+      titlebarWindow.isVisible() &&
+      pointInside(titlebarWindow.getBounds(), cursor);
+
+    if (overMain || overTitlebar) {
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+
+      if (!titlebarWindow.isVisible()) {
+        if (syncTitlebarPosition()) {
+          titlebarWindow.showInactive();
+        }
+      }
+    } else if (
+      titlebarWindow.isVisible() &&
+      !hideTimer
+    ) {
+      hideTimer = setTimeout(() => {
+        hideTimer = null;
+
+        if (
+          titlebarWindow &&
+          !titlebarWindow.isDestroyed()
+        ) {
+          titlebarWindow.hide();
+        }
+      }, HIDE_DELAY);
+    }
+  }, HOVER_INTERVAL);
+}
+
+// --------------------------------------------------
+// Title bar window
+// --------------------------------------------------
+
+function createTitlebarWindow() {
+  titlebarWindow = new BrowserWindow({
+    parent: mainWindow,
+    width: 500,
+    height: BAR_HEIGHT,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    alwaysOnTop: true,
+    resizable: false,
+    hasShadow: false,
+    skipTaskbar: true,
+
+    webPreferences: {
+      preload: path.join(
+        __dirname,
+        "titlebar-preload.cjs",
+      ),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  titlebarWindow.loadFile(
+    path.join(__dirname, "titlebar.html"),
+  );
+  titlebarWindow.setAlwaysOnTop(true);
+
+  titlebarWindow.webContents.on(
+    "did-finish-load",
+    () => {
+      titlebarWindow.webContents.send(
+        "titlebar:placement",
+        currentPlacement,
+      );
+    },
+  );
+
+  titlebarWindow.on("closed", () => {
+    titlebarWindow = null;
+  });
+}
+
+// --------------------------------------------------
+// Main window
+// --------------------------------------------------
+
+function createWindow() {
+  const { workArea } = screen.getPrimaryDisplay();
+
+  const width = 500;
+  const height = 350;
+
+  mainWindow = new BrowserWindow({
+    width,
+    height,
+
+    x: workArea.x + workArea.width - width - 20,
+    y: workArea.y + workArea.height - height - 20,
+
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    alwaysOnTop: true,
+    resizable: true,
+    hasShadow: false,
+
+    webPreferences: {
+      preload: path.join(
+        __dirname,
+        "preload.cjs",
+      ),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+
+  mainWindow.on("move", syncTitlebarPosition);
+  mainWindow.on("resize", syncTitlebarPosition);
+  mainWindow.on("show", () => {
+    syncTitlebarPosition();
+  });
+
+  mainWindow.on("hide", () => {
+    titlebarWindow?.hide();
+  });
+
+  mainWindow.on("minimize", () => {
+    titlebarWindow?.hide();
+  });
+
+  mainWindow.on("enter-full-screen", () => {
+    titlebarWindow?.hide();
+  });
+
+  mainWindow.on("close", (event) => {
+    if (!quitting) {
+      event.preventDefault();
+
+      mainWindow.hide();
+      titlebarWindow?.hide();
+    }
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
+  if (app.isPackaged) {
+    mainWindow.loadFile(
+      path.join(__dirname, "../dist/index.html"),
+    );
+  } else {
+    mainWindow.loadURL(
+      "http://127.0.0.1:5173",
+    );
+  }
+
+  createTitlebarWindow();
+  startHoverMonitoring();
+}
+
+// --------------------------------------------------
+
+// --------------------------------------------------
+// Move the main window when dragging the toolbar.
+// --------------------------------------------------
+
+let toolbarDrag = null;
+let toolbarDragTimer = null;
+
+function stopToolbarDrag() {
+  if (toolbarDragTimer) {
+    clearInterval(toolbarDragTimer);
+    toolbarDragTimer = null;
+  }
+  toolbarDrag = null;
+}
+
+ipcMain.on("titlebar:drag-start", (event) => {
+  if (
+    event.sender !== titlebarWindow?.webContents ||
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    mainWindow.isFullScreen()
+  ) return;
+
+  stopToolbarDrag();
+
+  const cursor = screen.getCursorScreenPoint();
+  const bounds = mainWindow.getBounds();
+
+  toolbarDrag = {
+    offsetX: cursor.x - bounds.x,
+    offsetY: cursor.y - bounds.y,
+  };
+
+  toolbarDragTimer = setInterval(() => {
+    if (
+      !toolbarDrag ||
+      !mainWindow ||
+      mainWindow.isDestroyed()
+    ) {
+      stopToolbarDrag();
+      return;
+    }
+
+    const point = screen.getCursorScreenPoint();
+
+    const x = Math.round(point.x - toolbarDrag.offsetX);
+    const y = Math.round(point.y - toolbarDrag.offsetY);
+
+    const [currentX, currentY] = mainWindow.getPosition();
+
+    if (x !== currentX || y !== currentY) {
+      mainWindow.setPosition(x, y);
+      syncTitlebarPosition();
+    }
+  }, 16);
+});
+
+ipcMain.on("titlebar:drag-end", (event) => {
+  if (event.sender !== titlebarWindow?.webContents) return;
+  stopToolbarDrag();
+});
+
+// Title bar button actions
+// --------------------------------------------------
+
+ipcMain.on("titlebar:close", (event) => {
+  if (
+    event.sender !== titlebarWindow?.webContents
+  ) {
+    return;
+  }
+
+  mainWindow?.hide();
+  titlebarWindow?.hide();
+});
+
+ipcMain.on("titlebar:minimize", (event) => {
+  if (
+    event.sender !== titlebarWindow?.webContents
+  ) {
+    return;
+  }
+
+  mainWindow?.minimize();
+  titlebarWindow?.hide();
+});
+
+ipcMain.on("titlebar:fullscreen", (event) => {
+  if (
+    event.sender !== titlebarWindow?.webContents
+  ) {
+    return;
+  }
+
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed()
+  ) {
+    return;
+  }
+
+  mainWindow.setFullScreen(
+    !mainWindow.isFullScreen(),
+  );
+
+  titlebarWindow?.hide();
+});
+
+// --------------------------------------------------
+// Application lifecycle
+// --------------------------------------------------
+
+app.whenReady().then(() => {
+  createWindow();
+
+  // Begin monitoring system-wide activity.
+  activityMonitor.start();
+
+  app.on("activate", () => {
+    if (
+      mainWindow &&
+      !mainWindow.isDestroyed()
+    ) {
+      mainWindow.show();
+    } else {
+      createWindow();
+    }
+  });
+});
+
+app.on("before-quit", () => {
+  quitting = true;
+
+  stopHoverMonitoring();
+
+  // Stop the activity polling interval.
+  activityMonitor.stop();
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
+
+
+=================================================================
+FILE: electron/preload.cjs
+=================================================================
+
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("edenAPI", {
+  // Existing world persistence
+  loadWorld: () => ipcRenderer.invoke("world:load"),
+
+  saveWorld: (world) =>
+    ipcRenderer.invoke("world:save", world),
+
+  // Get the current system activity status
+  getCurrentActivity: () =>
+    ipcRenderer.invoke("activity:get-current"),
+
+  // Listen for system activity changes
+  onActivityChanged: (callback) => {
+    const listener = (_event, activity) => {
+      callback(activity);
+    };
+
+    ipcRenderer.on("activity:changed", listener);
+
+    // Return a cleanup function
+    return () => {
+      ipcRenderer.removeListener(
+        "activity:changed",
+        listener
+      );
+    };
+  },
+});
+
+=================================================================
+FILE: electron/titlebar-preload.cjs
+=================================================================
+
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("titlebarAPI", {
+  startDrag: () => ipcRenderer.send("titlebar:drag-start"),
+  endDrag: () => ipcRenderer.send("titlebar:drag-end"),
+
+  close: () => ipcRenderer.send("titlebar:close"),
+  minimize: () => ipcRenderer.send("titlebar:minimize"),
+  fullscreen: () => ipcRenderer.send("titlebar:fullscreen"),
+  setPlacementListener: (callback) => {
+    ipcRenderer.on("titlebar:placement", (_event, placement) => {
+      callback(placement);
+    });
+  },
+});
+
+=================================================================
+FILE: electron/titlebar.html
+=================================================================
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'"
+    />
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      .titlebar {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        padding: 0 12px;
+        background: rgba(225, 242, 234, 0.95);
+        -webkit-app-region: no-drag;
+      }
+
+      .titlebar.above {
+        border-radius: 10px 10px 0 0;
+      }
+
+      .titlebar.below {
+        border-radius: 0 0 10px 10px;
+      }
+
+      .controls {
+        display: flex;
+        gap: 8px;
+        -webkit-app-region: no-drag;
+      }
+
+      .control {
+        width: 13px;
+        height: 13px;
+        padding: 0;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      .close {
+        background: #ff5f57;
+      }
+
+      .minimize {
+        background: #febc2e;
+      }
+
+      .fullscreen {
+        background: #28c840;
+      }
+
+      .control:hover {
+        filter: brightness(0.9);
+      }
+
+      .title {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: #42675a;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="titlebar" class="titlebar above">
+      <div class="controls">
+        <button id="close" class="control close" title="Close" aria-label="Close"></button>
+        <button id="minimize" class="control minimize" title="Minimize" aria-label="Minimize"></button>
+        <button id="fullscreen" class="control fullscreen" title="Fullscreen" aria-label="Fullscreen"></button>
+      </div>
+
+      <span class="title">EDEN.EXE</span>
+    </div>
+
+    <script src="./titlebar.js"></script>
+  </body>
+</html>
+
+=================================================================
+FILE: electron/titlebar.js
+=================================================================
+
+document.getElementById("close").addEventListener("click", () => {
+  window.titlebarAPI.close();
+});
+
+document.getElementById("minimize").addEventListener("click", () => {
+  window.titlebarAPI.minimize();
+});
+
+document.getElementById("fullscreen").addEventListener("click", () => {
+  window.titlebarAPI.fullscreen();
+});
+
+window.titlebarAPI.setPlacementListener((placement) => {
+  const bar = document.getElementById("titlebar");
+
+  bar.classList.toggle("above", placement === "above");
+  bar.classList.toggle("below", placement === "below");
+});
+
+// Drag the entire EDEN.EXE window from the toolbar.
+const dragSurface = document.getElementById("titlebar");
+
+dragSurface.addEventListener("mousedown", (event) => {
+  if (event.button !== 0 || event.target.closest(".controls")) return;
+  window.titlebarAPI.startDrag();
+  event.preventDefault();
+});
+
+window.addEventListener("mouseup", () => {
+  window.titlebarAPI.endDrag();
+});
+
+window.addEventListener("blur", () => {
+  window.titlebarAPI.endDrag();
+});
+
+
+=================================================================
+FILE: src/state/worldPersistence.ts
+=================================================================
+
+import { DEFAULT_WORLD_STATE, getCityDayKey } from "../simulation/worldDefaults";
+import { MAX_BUILDING_FLOORS } from "../edenModels";
+import type { ActivityCategory, Building, Plant, Resident, WorldState } from "../simulation/types";
+import { useWorldStore } from "./worldStore";
+
+const BROWSER_SAVE_KEY = "eden-world-v1";
+let initialized = false;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** Normalize worlds saved by either side of the earlier merge. */
+function normalizeWorld(input: unknown): WorldState | null {
+  if (!isRecord(input)) return null;
+  const source = isRecord(input.world) ? input.world : input;
+  if (
+    !Array.isArray(source.buildings) ||
+    !Array.isArray(source.plants) ||
+    !Array.isArray(source.residents)
+  )
+    return null;
+
+  const activitySource = isRecord(source.activity) ? source.activity : {};
+  const legacyCategory =
+    typeof source.activity === "string" ? source.activity : activitySource.category;
+  const category: ActivityCategory =
+    legacyCategory === "productivity" || legacyCategory === "leisure" || legacyCategory === "idle"
+      ? legacyCategory
+      : "idle";
+  const buildings = source.buildings.map((value, index) => {
+    const building = isRecord(value) ? value : {};
+    return {
+      ...building,
+      type: "building",
+      id: typeof building.id === "string" ? building.id : `building-${index + 1}`,
+      name: typeof building.name === "string" ? building.name : "Solar Workshop",
+      variantId: typeof building.variantId === "string" ? building.variantId : "solar-workshop",
+      floors: typeof building.floors === "number" && Number.isFinite(building.floors)
+        ? Math.max(1, Math.min(MAX_BUILDING_FLOORS, Math.floor(building.floors)))
+        : undefined,
+      moss: typeof building.moss === "number" && Number.isFinite(building.moss)
+        ? Math.max(0, Math.min(1, building.moss))
+        : 0,
+    };
+  }) as Building[];
+  const plants = source.plants.map((value, index) => {
+    const plant = isRecord(value) ? value : {};
+    const species = typeof plant.species === "string" ? plant.species : "broadleaf";
+    return {
+      ...plant,
+      type: "plant",
+      id: typeof plant.id === "string" ? plant.id : `plant-${index + 1}`,
+      species,
+      variantId: typeof plant.variantId === "string" ? plant.variantId : species,
+    };
+  }) as Plant[];
+  const residents = source.residents.map((value, index) => {
+    const resident = isRecord(value) ? value : {};
+    return {
+      ...resident,
+      type: "resident",
+      id: typeof resident.id === "string" ? resident.id : `resident-${index + 1}`,
+    };
+  }) as Resident[];
+
+  const grid = isRecord(source.grid) ? source.grid : {};
+  const weather = isRecord(source.weather) ? source.weather : DEFAULT_WORLD_STATE.weather;
+  const progression = isRecord(source.progression) ? source.progression : {};
+  return {
+    grid: { ...DEFAULT_WORLD_STATE.grid, ...grid, width: 20, depth: 20, cellSize: 1.5 } as WorldState["grid"],
+    buildings,
+    plants,
+    residents,
+    weather: {
+      condition: weather.condition === "cloudy" || weather.condition === "rainy" ? weather.condition : "sunny",
+      updatedAt: typeof weather.updatedAt === "number" ? weather.updatedAt : Date.now(),
+    },
+    simulationTime: typeof source.simulationTime === "number" ? source.simulationTime : 0,
+    activity: {
+      category,
+      productivityPoints:
+        typeof activitySource.productivityPoints === "number"
+          ? activitySource.productivityPoints
+          : isRecord(source.progression) &&
+              typeof source.progression.productivitySeconds === "number"
+            ? source.progression.productivitySeconds
+            : 0,
+      leisurePoints:
+        typeof activitySource.leisurePoints === "number"
+          ? activitySource.leisurePoints
+          : isRecord(source.progression) && typeof source.progression.leisureSeconds === "number"
+            ? source.progression.leisureSeconds
+            : 0,
+      idlePoints:
+        typeof activitySource.idlePoints === "number"
+          ? activitySource.idlePoints
+          : isRecord(source.progression) && typeof source.progression.idleSeconds === "number"
+            ? source.progression.idleSeconds
+            : 0,
+    },
+    lastActiveAt: typeof source.lastActiveAt === "number" ? source.lastActiveAt : Date.now(),
+    progression: {
+      unlockedBuildings: Array.isArray(progression.unlockedBuildings)
+        ? progression.unlockedBuildings.filter((item): item is string => typeof item === "string")
+        : [],
+      consumedMilestones: isRecord(progression.consumedMilestones)
+        ? {
+            productivity: typeof progression.consumedMilestones.productivity === "number" ? Math.max(0, Math.floor(progression.consumedMilestones.productivity)) : 0,
+            leisure: typeof progression.consumedMilestones.leisure === "number" ? Math.max(0, Math.floor(progression.consumedMilestones.leisure)) : 0,
+            idle: typeof progression.consumedMilestones.idle === "number" ? Math.max(0, Math.floor(progression.consumedMilestones.idle)) : 0,
+          }
+        : { productivity: 0, leisure: 0, idle: 0 },
+    },
+    cityDayKey: typeof source.cityDayKey === "string"
+      ? source.cityDayKey
+      : getCityDayKey(new Date(typeof source.lastActiveAt === "number" ? source.lastActiveAt : Date.now())),
+    cycleStartedAt: typeof source.cycleStartedAt === "number" ? source.cycleStartedAt : Date.now(),
+  };
+}
+
+export async function initializeWorldPersistence(): Promise<void> {
+  if (initialized) return;
+
+  const api = window.edenAPI;
+  const useBrowserStorage = !api;
+  try {
+    const savedValue = api ? await api.loadWorld() : localStorage.getItem(BROWSER_SAVE_KEY);
+    if (savedValue) {
+      const parsed =
+        typeof savedValue === "string" ? (JSON.parse(savedValue) as unknown) : savedValue;
+      const world = normalizeWorld(parsed);
+      if (!world) throw new Error("Saved world has an unsupported format.");
+      if (world.cityDayKey !== getCityDayKey()) useWorldStore.getState().resetWorld();
+      else useWorldStore.getState().loadWorld(world);
+    }
+  } catch (error) {
+    console.error("Failed to load saved world:", error);
+    // Don't overwrite a save that failed to load or validate.
+    return;
+  }
+
+  let saveQueue = Promise.resolve();
+  useWorldStore.subscribe((state, previousState) => {
+    if (state.world === previousState.world) return;
+    const snapshot = structuredClone(state.world);
+    saveQueue = saveQueue
+      .catch(() => undefined)
+      .then(async () => {
+        if (api) await api.saveWorld(snapshot);
+        else if (useBrowserStorage)
+          localStorage.setItem(BROWSER_SAVE_KEY, JSON.stringify(snapshot));
+      })
+      .catch((error) => console.error("Failed to save world:", error));
+  });
+
+  initialized = true;
+}
+
+
+=================================================================
+FILE: src/simulation/types.ts
+=================================================================
+
+/** Shared simulation and persistence types. Grid positions are zero-based cells. */
+export type EntityId = string;
+export type EntityType = "building" | "plant" | "resident";
+export type ActivityCategory = "productivity" | "leisure" | "idle";
+export type ResidentActivity = "idle" | "walking" | "working" | "socializing" | "resting";
+
+export interface GridPosition {
+  x: number;
+  z: number;
+}
+export interface WorldPosition {
+  x: number;
+  y: number;
+  z: number;
+}
+export type Vector3 = WorldPosition;
+export interface WorldGrid {
+  readonly width: 20;
+  readonly depth: 20;
+  cellSize: number;
+  origin: WorldPosition;
+}
+export interface Building {
+  type: "building";
+  id: EntityId;
+  name: string;
+  /** Stable key used to select this building's visual variant. */
+  variantId: string;
+  /** Anchor cell at the minimum X/Z footprint corner. */
+  gridPosition: GridPosition;
+  footprint: { width: number; depth: number };
+  rotation: number;
+  floors?: number;
+  moss?: number;
+  growth?: number;
+  createdAt: number;
+}
+export interface Plant {
+  type: "plant";
+  id: EntityId;
+  species: string;
+  variantId: string;
+  gridPosition: GridPosition;
+  growth: number;
+  createdAt: number;
+}
+export interface Resident {
+  type: "resident";
+  id: EntityId;
+  name: string;
+  position: WorldPosition;
+  activity: ResidentActivity;
+  homeId?: EntityId;
+  route?: GridPosition[];
+  createdAt: number;
+}
+export type WorldEntity = Building | Plant | Resident;
+
+export interface Weather {
+  condition: "sunny" | "cloudy" | "rainy";
+  updatedAt: number;
+  cityDayKey?: string;
+}
+export interface ActivityState {
+  category: ActivityCategory;
+  /** Accumulated activity minutes by category. */
+  productivityPoints: number;
+  leisurePoints: number;
+  idlePoints: number;
+}
+export interface ProgressionState {
+  unlockedBuildings: string[];
+  consumedMilestones: Record<ActivityCategory, number>;
+}
+export interface WorldState {
+  /** Procedural water layout seed. */
+  waterSeed?: number;
+  grid: WorldGrid;
+  buildings: Building[];
+  plants: Plant[];
+  residents: Resident[];
+  weather: Weather;
+  simulationTime: number;
+  activity: ActivityState;
+  lastActiveAt: number;
+  progression: ProgressionState;
+  cityDayKey: string;
+  cycleStartedAt: number;
+}
+
+
+=================================================================
+FILE: src/main.tsx
+=================================================================
+
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+
+import App from "./App.tsx";
+import { initializeWorldPersistence } from "./state/worldPersistence";
+
+import "./index.css";
+
+async function startApp() {
+  // Load the saved world before rendering React.
+  await initializeWorldPersistence();
+
+  // Mount the React application.
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+
+void startApp();
+
+
+=================================================================
+FILE: src/state/worldStore.test.ts
+=================================================================
+
+// Test file: src/state/worldStore.test.ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useWorldStore } from './worldStore';
+
+describe('World Store Activity Integration', () => {
+  beforeEach(() => {
+    // Reset world state before each test
+    useWorldStore.getState().resetWorld();
+  });
+
+  it('updates the activity category correctly when switched', () => {
+    const store = useWorldStore.getState();
+    
+    // Switch to leisure
+    store.setActivityCategory('leisure');
+    expect(useWorldStore.getState().world.activity.category).toBe('leisure');
+
+    // Switch to productivity
+    store.setActivityCategory('productivity');
+    expect(useWorldStore.getState().world.activity.category).toBe('productivity');
+  });
+
+  it('forces category to idle when systemIdle is set to true', () => {
+    const store = useWorldStore.getState();
+    
+    store.setActivityCategory('productivity');
+    expect(useWorldStore.getState().world.activity.category).toBe('productivity');
+
+    // Trigger system idle
+    store.setSystemIdle(true);
+    expect(useWorldStore.getState().world.activity.category).toBe('idle');
+
+    // Remove system idle; should restore previous category
+    store.setSystemIdle(false);
+    expect(useWorldStore.getState().world.activity.category).toBe('productivity');
+  });
+});
+
+=================================================================
+FILE: src/tests/worldStore.test.ts
+=================================================================
+
+import { beforeEach, describe, expect, it } from "vitest";
+import { useWorldStore } from "../state/worldStore";
+
+describe("WorldStore", () => {
+  beforeEach(() => {
+    useWorldStore.getState().resetWorld();
+  });
+
+  it("initializes an empty world", () => {
+    const { world } = useWorldStore.getState();
+
+    expect(world.buildings).toHaveLength(0);
+    expect(world.plants).toHaveLength(0);
+    expect(world.residents).toHaveLength(0);
+    expect(world.activity.category).toBe("idle");
+  });
+
+  it("adds and removes a building", () => {
+    const building = {
+      type: "building" as const,
+      id: "building-1",
+      variantId: "solar-house",
+      name: "Solar House",
+      gridPosition: { x: 5, z: 10 },
+      footprint: { width: 2, depth: 2 },
+      rotation: 0,
+      createdAt: Date.now(),
+    };
+
+    useWorldStore.getState().addBuilding(building);
+
+    expect(useWorldStore.getState().world.buildings).toHaveLength(1);
+    expect(useWorldStore.getState().world.buildings[0].name).toBe("Solar House");
+
+    useWorldStore.getState().removeBuilding("building-1");
+
+    expect(useWorldStore.getState().world.buildings).toHaveLength(0);
+  });
+
+  it("tracks computer activity points", () => {
+    const store = useWorldStore.getState();
+
+    store.setActivityCategory("productivity");
+    store.addActivityPoints("productivity", 10);
+    store.addActivityPoints("idle", 5);
+
+    const { activity } = useWorldStore.getState().world;
+
+    expect(activity.category).toBe("productivity");
+    expect(activity.productivityPoints).toBe(10);
+    expect(activity.idlePoints).toBe(5);
+  });
+
+  it("uses five activity points per city milestone and applies all crossed milestones once", () => {
+    const store = useWorldStore.getState();
+    store.addActivityPoints("productivity", 15);
+    const { world } = useWorldStore.getState();
+    expect(world.progression.consumedMilestones.productivity).toBe(3);
+    expect(world.buildings.length).toBeGreaterThan(0);
+    expect(world.buildings.every(item => (item.floors ?? 1) <= 5)).toBe(true);
+    useWorldStore.getState().addActivityPoints("productivity", 0.1);
+    expect(useWorldStore.getState().world.progression.consumedMilestones.productivity).toBe(3);
+  });
+
+  it("keeps category milestones independent", () => {
+    const store = useWorldStore.getState();
+    store.addActivityPoints("leisure", 5);
+    store.addActivityPoints("idle", 5);
+    const { world } = useWorldStore.getState();
+    expect(world.plants).toHaveLength(1);
+    expect(world.residents).toHaveLength(1);
+    expect(world.progression.consumedMilestones).toEqual({ productivity: 0, leisure: 1, idle: 1 });
+  });
+
+  it("creates unique buildings and caps every generated or grown building at five floors", () => {
+    useWorldStore.getState().addActivityPoints("productivity", 50);
+    const buildings = useWorldStore.getState().world.buildings;
+    expect(new Set(buildings.map(item => item.id)).size).toBe(buildings.length);
+    expect(buildings.length).toBeGreaterThan(1);
+    expect(buildings.every(item => (item.floors ?? 1) <= 5)).toBe(true);
+  });
+
+  it("resets the world once the 4 AM local city-day boundary is crossed", () => {
+    const beforeBoundary = new Date(2026, 9, 10, 3, 59).getTime();
+    const afterBoundary = new Date(2026, 9, 10, 4, 0).getTime();
+    useWorldStore.getState().resetWorld(beforeBoundary);
+    useWorldStore.getState().addActivityPoints("leisure", 5);
+    useWorldStore.getState().advanceTime(1, afterBoundary);
+    const { world } = useWorldStore.getState();
+    expect(world.cityDayKey).toBe("2026-10-10");
+    expect(world.plants).toHaveLength(0);
+    expect(world.activity.leisurePoints).toBe(0);
+    useWorldStore.getState().advanceTime(1, afterBoundary + 1_000);
+    expect(useWorldStore.getState().world.cityDayKey).toBe("2026-10-10");
+  });
+
+  it("does not consume a building milestone when no placement is available", () => {
+    const world = structuredClone(useWorldStore.getState().world);
+    world.buildings = Array.from({ length: 400 }, (_, index) => ({
+      type: "building" as const,
+      id: `full-${index}`,
+      name: "Full plot",
+      variantId: "solar-house",
+      gridPosition: { x: index % 20, z: Math.floor(index / 20) },
+      footprint: { width: 1, depth: 1 },
+      rotation: 0,
+      floors: 5,
+      createdAt: Date.now(),
+    }));
+    useWorldStore.getState().loadWorld(world);
+    useWorldStore.getState().addActivityPoints("productivity", 5);
+    expect(useWorldStore.getState().world.progression.consumedMilestones.productivity).toBe(0);
+  });
+
+  it("prevents duplicate building unlocks", () => {
+    const store = useWorldStore.getState();
+
+    store.unlockBuilding("solar-house");
+    store.unlockBuilding("solar-house");
+
+    expect(useWorldStore.getState().world.progression.unlockedBuildings).toEqual(["solar-house"]);
+  });
+
+  it("advances simulation time", () => {
+    useWorldStore.getState().advanceTime(60);
+
+    expect(useWorldStore.getState().world.simulationTime).toBe(60);
+  });
+
+  it("resets the world", () => {
+    const store = useWorldStore.getState();
+
+    store.addActivityPoints("leisure", 20);
+    store.advanceTime(100);
+    store.resetWorld();
+
+    const { world } = useWorldStore.getState();
+
+    expect(world.activity.leisurePoints).toBe(0);
+    expect(world.simulationTime).toBe(0);
+  });
+});
+
+
+=================================================================
+FILE: src/EdenInsights.tsx
+=================================================================
+
+// aero-insights-v2: minimal, glassy Frutiger Aero interface.
+import { useCallback, useEffect, useState } from "react";
+import {
+  BUILDING_CATALOG,
+  MAX_BUILDING_FLOORS,
+  buildingProgress,
+  growthStage,
+} from "./edenModels";
+import type { Building } from "./simulation/types";
+import {
+  selectActivity,
+  selectBuildings,
+  selectProgression,
+  selectResidents,
+  useWorldStore,
+} from "./state/worldStore";
+
+// Mirrors the displayed building floor calculation used by the renderer.
+function displayedFloors(building: Building, now: number): number {
+  const config = BUILDING_CATALOG.find(item => item.id === building.variantId);
+  const stage = growthStage(buildingProgress(building, now));
+  const fallback = 1 + ((config?.floors ?? 1) - 1) * stage / 2;
+  return Math.min(MAX_BUILDING_FLOORS, Math.max(1, Math.round(building.floors ?? fallback)));
+}
+
+// The city's statistics reset at local 4 AM; unlike a fixed 24h calculation,
+// calculating consecutive local 4 AM boundaries also handles DST changes.
+function cityDayPercentage(timestamp: number): number {
+  const start = new Date(timestamp);
+  start.setHours(4, 0, 0, 0);
+  if (timestamp < start.getTime()) start.setDate(start.getDate() - 1);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const duration = Math.max(1, end.getTime() - start.getTime());
+  return Math.max(0, Math.min(100, (timestamp - start.getTime()) / duration * 100));
+}
+
+export function BuildingInsights({
+  buildingId,
+  onClose,
+}: {
+  buildingId: string | null;
+  onClose: () => void;
+}) {
+  const buildings = useWorldStore(selectBuildings);
+  const residents = useWorldStore(selectResidents);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!buildingId) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 2_000);
+    return () => window.clearInterval(interval);
+  }, [buildingId]);
+
+  useEffect(() => {
+    if (!buildingId) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [buildingId, onClose]);
+
+  const building = buildings.find(item => item.id === buildingId);
+  if (!building) return null;
+
+  const progress = Math.round(buildingProgress(building, now) * 100);
+  const floors = displayedFloors(building, now);
+  const residentCount = residents.filter(item => item.homeId === building.id).length;
+  const moss = Math.round(Math.max(0, Math.min(1, building.moss ?? 0)) * 100);
+  const title = building.name || BUILDING_CATALOG.find(item => item.id === building.variantId)?.name || "Building";
+
+  return (
+    <aside className="eden-insights eden-building-insights" role="dialog" aria-label={`${title} building details`}>
+      <div className="eden-insights-top">
+        <span className="eden-eyebrow">EDEN / BUILDING</span>
+        <button type="button" className="eden-insights-close" onClick={onClose} aria-label="Close building details">×</button>
+      </div>
+      <h2>{title}</h2>
+      <div className="eden-grid-pill">{building.footprint.width} × {building.footprint.depth} <span>CELLS</span></div>
+      <div className="eden-stat-grid">
+        <div><strong>{floors}</strong><span>Floors</span></div>
+        <div><strong>{moss}%</strong><span>Moss</span></div>
+        <div><strong>{residentCount}</strong><span>Residents</span></div>
+      </div>
+      <div className="eden-insights-row eden-development-label">
+        <span>Development</span><strong>{progress}%</strong>
+      </div>
+      <div className="eden-meter" role="progressbar" aria-label="Building development" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+        <div className="eden-meter-fill" style={{ width: `${progress}%` }} />
+      </div>
+    </aside>
+  );
+}
+
+// aero-insights-v3-pie: true proportional SVG pie slices.
+const PIE_CENTER = 150;
+const PIE_RADIUS = 132;
+
+function piePoint(degrees: number, radius: number) {
+  const radians = degrees * Math.PI / 180;
+  return {
+    x: PIE_CENTER + Math.cos(radians) * radius,
+    y: PIE_CENTER + Math.sin(radians) * radius,
+  };
+}
+
+function piePath(startDegrees: number, sweepDegrees: number) {
+  const first = piePoint(startDegrees, PIE_RADIUS);
+  const last = piePoint(startDegrees + sweepDegrees, PIE_RADIUS);
+  const largeArc = sweepDegrees > 180 ? 1 : 0;
+  return `M ${PIE_CENTER} ${PIE_CENTER} L ${first.x} ${first.y} A ${PIE_RADIUS} ${PIE_RADIUS} 0 ${largeArc} 1 ${last.x} ${last.y} Z`;
+}
+
+export function ActivityStats() {
+  const activity = useWorldStore(selectActivity);
+  const progression = useWorldStore(selectProgression);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const open = !dismissed && (hovered || focused || pinned);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  // X and Escape suppress the hover/focus trigger until pointer exits,
+  // focus leaves, or the status button is explicitly clicked again.
+  const close = useCallback(() => {
+    setDismissed(true);
+    setPinned(false);
+    setHovered(false);
+    setFocused(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
+
+  const rows = [
+    { key: "productivity", label: "Productivity", points: activity.productivityPoints, milestones: progression.consumedMilestones.productivity },
+    { key: "leisure", label: "Leisure", points: activity.leisurePoints, milestones: progression.consumedMilestones.leisure },
+    { key: "idle", label: "Idle", points: activity.idlePoints, milestones: progression.consumedMilestones.idle },
+  ];
+  const total = rows.reduce((sum, row) => sum + row.points, 0);
+  const dayProgress = cityDayPercentage(now);
+
+  // Percentages and sector angles all come from the same real activity totals.
+  let cursor = -90;
+  const slices = rows.map(row => {
+    const fraction = total > 0 ? Math.max(0, row.points) / total : 0;
+    const sweep = Math.min(360, fraction * 360);
+    const start = cursor;
+    cursor += sweep;
+    const mid = start + sweep / 2;
+    const isSmall = fraction < 0.12;
+    const position = piePoint(mid, isSmall ? 99 : fraction < 0.22 ? 88 : 76);
+    return { ...row, fraction, sweep, start, isSmall, position };
+  });
+
+  return (
+    <div
+      className={`eden-activity-wrap${open ? " is-open" : ""}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setDismissed(false); }}
+      onFocus={() => setFocused(true)}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setFocused(false);
+          setDismissed(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className="status"
+        aria-expanded={open}
+        aria-controls="eden-activity-stats"
+        onClick={() => {
+          if (open && pinned) close();
+          else { setDismissed(false); setPinned(true); }
+        }}
+      >
+        <i className={activity.category} />{activity.category}
+      </button>
+      <div
+        id="eden-activity-stats"
+        className="eden-insights eden-activity-popover"
+        role="region"
+        aria-label="Activity statistics"
+        aria-hidden={!open}
+      >
+        <div className="eden-insights-top">
+          <span className="eden-eyebrow">EDEN / ACTIVITY</span>
+          <button type="button" tabIndex={open ? 0 : -1} className="eden-insights-close" onClick={close} aria-label="Close activity statistics">×</button>
+        </div>
+        <div className="eden-day-progress">
+          <div className="eden-insights-row">
+            <span>Day progress</span><strong>{dayProgress.toFixed(0)}%</strong>
+          </div>
+          <div className="eden-meter" role="progressbar" aria-label="Current city day progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(dayProgress)}>
+            <div className="eden-meter-fill eden-meter-day" style={{ width: `${dayProgress}%` }} />
+          </div>
+          <span className="eden-day-subtitle">4 AM → 4 AM</span>
+        </div>
+        <h2>Activity breakdown</h2>
+        <div className="eden-pie-figure">
+          <svg
+            className="eden-pie-svg"
+            viewBox="0 0 300 300"
+            role="img"
+            aria-label={slices.map(slice => `${slice.label}: ${Math.round(slice.fraction * 100)} percent, ${slice.milestones} milestones`).join('; ')}
+          >
+            <defs>
+              <radialGradient id="eden-aero-pie-productivity" cx="24%" cy="16%" r="97%">
+                <stop offset="0%" stopColor="#c1fff0" />
+                <stop offset="45%" stopColor="#58dcbf" />
+                <stop offset="100%" stopColor="#139baa" />
+              </radialGradient>
+              <radialGradient id="eden-aero-pie-leisure" cx="24%" cy="16%" r="97%">
+                <stop offset="0%" stopColor="#fff8ce" />
+                <stop offset="49%" stopColor="#f4c977" />
+                <stop offset="100%" stopColor="#eaa65f" />
+              </radialGradient>
+              <radialGradient id="eden-aero-pie-idle" cx="24%" cy="16%" r="97%">
+                <stop offset="0%" stopColor="#effbff" />
+                <stop offset="45%" stopColor="#9ad5f0" />
+                <stop offset="100%" stopColor="#62a4ca" />
+              </radialGradient>
+            </defs>
+            {total <= 0 ? (
+              <g>
+                <circle cx={PIE_CENTER} cy={PIE_CENTER} r={PIE_RADIUS} fill="#ccecf2" stroke="#ffffff" strokeWidth={2} />
+                <text x={PIE_CENTER} y={PIE_CENTER - 6} textAnchor="middle" className="eden-pie-label">
+                  <tspan x={PIE_CENTER} fontSize="21">0%</tspan>
+                  <tspan x={PIE_CENTER} dy="19" fontSize="11">0 milestones</tspan>
+                </text>
+              </g>
+            ) : (
+              slices.filter(slice => slice.sweep > 0).map(slice => (
+                <g key={slice.key}>
+                  <title>{`${slice.label}: ${(slice.fraction * 100).toFixed(1)}%, ${slice.milestones} milestones`}</title>
+                  {slice.sweep >= 359.999 ? (
+                    <circle cx={PIE_CENTER} cy={PIE_CENTER} r={PIE_RADIUS} fill={`url(#eden-aero-pie-${slice.key})`} stroke="#faffff" strokeWidth={2} />
+                  ) : (
+                    <path d={piePath(slice.start, slice.sweep)} fill={`url(#eden-aero-pie-${slice.key})`} stroke="#faffff" strokeWidth={2} strokeLinejoin="round" />
+                  )}
+                  <text
+                    x={slice.position.x}
+                    y={slice.position.y - (slice.isSmall ? 4 : 7)}
+                    textAnchor="middle"
+                    className={`eden-pie-label${slice.isSmall ? ' eden-pie-label-small' : ''}`}
+                  >
+                    <tspan x={slice.position.x} fontSize={slice.isSmall ? 12 : 19}>{Math.round(slice.fraction * 100)}%</tspan>
+                    <tspan x={slice.position.x} dy={slice.isSmall ? 11 : 18} fontSize={slice.isSmall ? 8 : 11}>{slice.milestones} milestones</tspan>
+                  </text>
+                </g>
+              ))
+            )}
+          </svg>
+          <div className="eden-pie-legend" aria-label="Activity categories">
+            {rows.map(row => (
+              <span key={row.key}>
+                <i className={`eden-dot eden-dot-${row.key}`} aria-hidden="true" />
+                {row.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+=================================================================
+FILE: src/simulation/worldDefaults.ts
+=================================================================
+
+import type {
+  ActivityState,
+  ProgressionState,
+  Weather,
+  WorldGrid,
+  WorldState,
+} from "./types";
+
+export const DEFAULT_WORLD_GRID: WorldGrid = {
+  width: 20,
+  depth: 20,
+  cellSize: 1.5,
+  origin: { x: 0, y: 0, z: 0 },
+};
+
+export const DEFAULT_WEATHER: Weather = { condition: "sunny", updatedAt: Date.now(), cityDayKey: "" };
+export const DEFAULT_ACTIVITY_STATE: ActivityState = {
+  category: "idle",
+  productivityPoints: 0,
+  leisurePoints: 0,
+  idlePoints: 0,
+};
+export const DEFAULT_PROGRESSION_STATE: ProgressionState = {
+  unlockedBuildings: [],
+  consumedMilestones: { productivity: 0, leisure: 0, idle: 0 },
+};
+
+export function getCityDayKey(date = new Date()): string {
+  const local = new Date(date);
+  if (local.getHours() < 4) local.setDate(local.getDate() - 1);
+  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+}
+
+export const DEFAULT_CITY_DAY_KEY = getCityDayKey();
+
+export type DayPhase = "day" | "sunset" | "night";
+export function getDayPhase(elapsedSeconds: number): DayPhase {
+  const minute = ((elapsedSeconds % 600) + 600) % 600 / 60;
+  if (minute < 5) return "day";
+  if (minute < 6) return "sunset";
+  return "night";
+}
+
+export function selectWeatherCondition(random: () => number = Math.random): Weather["condition"] {
+  const roll = random();
+  return roll < 0.62 ? "sunny" : roll < 0.88 ? "cloudy" : "rainy";
+}
+
+export const DEFAULT_WORLD_STATE: WorldState = {
+  waterSeed: 1,
+  grid: DEFAULT_WORLD_GRID,
+  buildings: [],
+  plants: [],
+  residents: [],
+  weather: DEFAULT_WEATHER,
+  simulationTime: 0,
+  activity: DEFAULT_ACTIVITY_STATE,
+  lastActiveAt: Date.now(),
+  progression: DEFAULT_PROGRESSION_STATE,
+  cityDayKey: DEFAULT_CITY_DAY_KEY,
+  cycleStartedAt: Date.now(),
+};
+
+
+=================================================================
+FILE: src/edenAPI.d.ts
+=================================================================
+
+import type { WorldState } from "./simulation/types";
+
+// System activity status reported by Electron
+export type ActivityStatus = "active" | "idle";
+
+// Activity event sent from Electron
+export interface ActivityEvent {
+  status: ActivityStatus;
+  idleSeconds: number;
+  timestamp: number;
+}
+
+declare global {
+  interface Window {
+    edenAPI?: {
+      // Existing world persistence
+      loadWorld: () => Promise<WorldState | null>;
+
+      saveWorld: (world: WorldState) => Promise<boolean>;
+
+      // Get current system activity
+      getCurrentActivity: () => Promise<ActivityEvent | null>;
+
+      // Subscribe to activity changes
+      onActivityChanged: (
+        callback: (activity: ActivityEvent) => void
+      ) => () => void;
+    };
+  }
+}
+
+export {};

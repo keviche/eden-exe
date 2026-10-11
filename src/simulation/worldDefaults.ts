@@ -19,6 +19,7 @@ export const DEFAULT_ACTIVITY_STATE: ActivityState = {
   productivityPoints: 0,
   leisurePoints: 0,
   idlePoints: 0,
+  bubblePops: 0,
 };
 export const DEFAULT_PROGRESSION_STATE: ProgressionState = {
   unlockedBuildings: [],

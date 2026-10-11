@@ -1,4 +1,5 @@
 import BubbleFilm from "./BubbleFilm";
+import { useWorldStore } from "./state/worldStore";
 import { BOARD_SIZE } from "./edenModels";
 import { useFrame, useThree } from "@react-three/fiber";
 import type { ThreeEvent } from "@react-three/fiber";
@@ -85,6 +86,7 @@ function BubbleMesh({ bubble }: { bubble: Bubble }) {
   const sparks = useRef<InstancedMesh>(null);
   const sparkMaterial = useRef<MeshBasicMaterial>(null);
   const clock = useThree(state => state.clock);
+  const recordBubblePop = useWorldStore(state => state.recordBubblePop);
   const matrix = useMemo(() => new Matrix4(), []);
   const timeOffset = useRef(0);
   const popped = useRef<{ started: number; scale: number } | null>(null);
@@ -101,6 +103,7 @@ function BubbleMesh({ bubble }: { bubble: Bubble }) {
       scale: object.scale.x,
     };
 
+    recordBubblePop();
     if (shell.current) shell.current.visible = false;
   }
 

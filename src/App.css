@@ -459,3 +459,46 @@
   .eden-pie-svg { width: min(180px, 100%); }
   .eden-activity-popover .eden-day-progress { margin-bottom: 8px; padding: 8px; }
 }
+
+/* EDEN BUBBLE POP COUNTER V1 */
+.eden-bubble-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 13px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255,255,255,.95);
+  border-bottom-color: rgba(100,190,214,.52);
+  border-radius: 15px;
+  background: linear-gradient(165deg, rgba(255,255,255,.97), rgba(181,233,248,.8));
+  box-shadow: inset 0 1px 0 white, 0 4px 10px rgba(58,151,183,.12);
+  color: #237e94;
+  font-family: "Avenir Next", Avenir, "Trebuchet MS", sans-serif;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+.eden-bubble-counter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+}
+.eden-bubble-counter-orb {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid rgba(69,159,203,.65);
+  background: radial-gradient(circle at 30% 25%, #fff 4%, #ddffff 18%, #8cdef2 54%, #66a9e7 76%, #dbbbf7 100%);
+  box-shadow: inset -2px -2px 4px rgba(80,125,210,.23), 0 1px 5px rgba(63,148,185,.2);
+}
+.eden-bubble-counter strong {
+  color: #119bb3;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 #fff;
+}

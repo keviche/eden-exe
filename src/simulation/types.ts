@@ -67,6 +67,9 @@ export interface ActivityState {
   productivityPoints: number;
   leisurePoints: number;
   idlePoints: number;
+
+  /** Successful clicks on bubbles during the current city day. */
+  bubblePops?: number;
 }
 export interface ProgressionState {
   unlockedBuildings: string[];

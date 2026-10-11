@@ -33,6 +33,7 @@ interface WorldStore {
   removeResident: (id: EntityId) => void;
   setActivityCategory: (category: ActivityCategory, at?: number) => void;
   recordInput: (at?: number) => void;
+  recordBubblePop: () => void;
   addActivityPoints: (category: ActivityCategory, points: number) => void;
   unlockBuilding: (buildingType: string) => void;
   advanceTime: (seconds: number, at?: number) => void;
@@ -428,6 +429,18 @@ export const useWorldStore = create<WorldStore>((set) => ({
                 state.world.activity.category,
                 state.lastNonIdleCategory
               ),
+        },
+      },
+    })),
+
+  // A successful bubble click, separate from the activity pie categories.
+  recordBubblePop: () =>
+    set(state => ({
+      world: {
+        ...state.world,
+        activity: {
+          ...state.world.activity,
+          bubblePops: (state.world.activity.bubblePops ?? 0) + 1,
         },
       },
     })),

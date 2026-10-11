@@ -98,6 +98,11 @@ function normalizeWorld(input: unknown): WorldState | null {
           : isRecord(source.progression) && typeof source.progression.idleSeconds === "number"
             ? source.progression.idleSeconds
             : 0,
+      bubblePops:
+        typeof activitySource.bubblePops === "number" &&
+        Number.isFinite(activitySource.bubblePops)
+          ? Math.max(0, Math.floor(activitySource.bubblePops))
+          : 0,
     },
     lastActiveAt: typeof source.lastActiveAt === "number" ? source.lastActiveAt : Date.now(),
     progression: {
