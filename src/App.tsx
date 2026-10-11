@@ -26,6 +26,7 @@ import {
 import type { Batch, BuildingVariant, Part, Shape } from "./edenModels";
 import "./App.css";
 import FastForwardControls from "./FastForwardControls";
+import { nextSimulationSpeed, type SimulationSpeed } from "./simulation/timeControls";
 import { ActivityStats, BuildingInsights } from "./EdenInsights";
 
 // Unit geometries are shared by every instance, including every plant leaf.
@@ -562,14 +563,15 @@ function BatchLayer({ batches, night }: { batches: Batch[]; night: boolean }) {
 function BuildingsLayer({ night, onSelectBuilding }: { night: boolean; onSelectBuilding: (id: string) => void }) {
   const buildings = useWorldStore(selectBuildings);
   const [now, setNow] = useState(() => Date.now());
+  const developmentTimeOffsetMs = useWorldStore(state => state.developmentTimeOffsetMs);
 
   useEffect(() => {
-    const growing = buildings.filter(item => !hasExplicitGrowth(item) && buildingProgress(item, Date.now()) < 1);
+    const growing = buildings.filter(item => !hasExplicitGrowth(item) && buildingProgress(item, Date.now() + useWorldStore.getState().developmentTimeOffsetMs) < 1);
     if (growing.length === 0) return;
     const timer = window.setInterval(() => {
       const next = Date.now();
       setNow(next);
-      if (growing.every(item => buildingProgress(item, next) >= 1)) window.clearInterval(timer);
+      if (growing.every(item => buildingProgress(item, next + useWorldStore.getState().developmentTimeOffsetMs) >= 1)) window.clearInterval(timer);
     }, GROWTH_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [buildings]);
@@ -586,7 +588,7 @@ function BuildingsLayer({ night, onSelectBuilding }: { night: boolean; onSelectB
       // Footprints are occupied grid dimensions. A quarter-turn swaps the local
       // dimensions so a rectangular building still fits its recorded plot.
       const { width, depth } = buildingDimensions(item.footprint, item.rotation);
-      const progress = buildingProgress(item, now);
+      const progress = buildingProgress(item, now + developmentTimeOffsetMs);
       const stage = growthStage(progress);
       const model = buildingModel(item.variantId, width, depth, stage, hashId(item.id), item.floors, item.moss);
       // Horizontal size stays fixed so growth cannot consume neighboring plots.
@@ -688,7 +690,7 @@ function BuildingsLayer({ night, onSelectBuilding }: { night: boolean; onSelectB
       list.push(ownerByPart[index]!);
     });
     return { batches: batchParts(parts), ownerByBatch };
-  }, [buildings, now]);
+  }, [buildings, now, developmentTimeOffsetMs]);
 
   return <>{batches.map(batch => <InstanceBatch
     key={batch.key}
@@ -881,13 +883,14 @@ useEffect(() => {
   const [shadows, setShadows] = useState(true);
   const [notice, setNotice] = useState("");
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
+  const [simulationSpeed, setSimulationSpeed] = useState<SimulationSpeed>(1);
 
   useEffect(() => {
     let previous = Date.now();
     let lastInput = 0;
     const timer = window.setInterval(() => {
       const now = Date.now();
-      advanceTime(Math.max(0, now - previous) / 1_000, now);
+      advanceTime(Math.min(10, Math.max(0, now - previous) / 1_000), now, simulationSpeed);
       previous = now;
     }, 1_000);
     const onInput = (event: Event) => {
@@ -916,7 +919,7 @@ useEffect(() => {
       window.removeEventListener("keydown", onInput);
       window.removeEventListener("wheel", onInput);
     };
-  }, [advanceTime, recordInput, setActivityCategory]);
+  }, [advanceTime, recordInput, setActivityCategory, simulationSpeed]);
   
   function handleAddBuilding() {
     const config = BUILDING_CATALOG.find(entry => entry.id === variant)!;
@@ -928,7 +931,7 @@ useEffect(() => {
     const item: Building = {
       type: "building", id: createRendererId("building"), variantId: config.id, name: config.name,
       gridPosition: plot, footprint: { width: config.width, depth: config.depth },
-      rotation: 0, createdAt: Date.now(),
+      rotation: 0, createdAt: Date.now() + state.developmentTimeOffsetMs,
     };
     try {
       addBuilding(item);
@@ -1008,6 +1011,22 @@ useEffect(() => {
           <span role="status" style={{ lineHeight: 1.4 }}>{notice}</span>
         </div>}
       </div>
+      <button
+        type="button"
+        aria-label={`Development speed ${simulationSpeed} times; click to change`}
+        title="Development mode: accelerates growth and simulated activity points"
+        onClick={() => setSimulationSpeed(speed => nextSimulationSpeed(speed))}
+        style={{
+          position: "absolute", top: 12, right: 16, zIndex: 110,
+          borderRadius: 999, border: "1px solid rgba(255,255,255,.65)",
+          background: "rgba(193,244,250,.82)", color: "#185467",
+          boxShadow: "0 3px 18px rgba(30,110,132,.17)",
+          backdropFilter: "blur(12px)", cursor: "pointer",
+          padding: "7px 13px", fontWeight: 700, fontSize: 12,
+        }}
+      >
+        DEV ⏩ {simulationSpeed}×
+      </button>
       <div className="wordmark">EDEN<span>.EXE</span></div>
       <BuildingInsights buildingId={selectedBuildingId} onClose={() => setSelectedBuildingId(null)} />
       <ActivityStats />

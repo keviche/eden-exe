@@ -45,6 +45,7 @@ export function BuildingInsights({
 }) {
   const buildings = useWorldStore(selectBuildings);
   const residents = useWorldStore(selectResidents);
+  const developmentTimeOffsetMs = useWorldStore(state => state.developmentTimeOffsetMs);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -65,8 +66,8 @@ export function BuildingInsights({
   const building = buildings.find(item => item.id === buildingId);
   if (!building) return null;
 
-  const progress = Math.round(buildingProgress(building, now) * 100);
-  const floors = displayedFloors(building, now);
+  const progress = Math.round(buildingProgress(building, now + developmentTimeOffsetMs) * 100);
+  const floors = displayedFloors(building, now + developmentTimeOffsetMs);
   const residentCount = residents.filter(item => item.homeId === building.id).length;
   const moss = Math.round(Math.max(0, Math.min(1, building.moss ?? 0)) * 100);
   const title = building.name || BUILDING_CATALOG.find(item => item.id === building.variantId)?.name || "Building";

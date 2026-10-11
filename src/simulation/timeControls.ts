@@ -1,4 +1,4 @@
-export const SIMULATION_SPEEDS = [1, 2, 4, 8, 16] as const;
+export const SIMULATION_SPEEDS = [1, 2, 4, 8, 16, 32, 64, 128, 256] as const;
 export type SimulationSpeed = (typeof SIMULATION_SPEEDS)[number];
 
 export function nextSimulationSpeed(current: number): SimulationSpeed {

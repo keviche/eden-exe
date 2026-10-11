@@ -19,6 +19,8 @@ type NonIdleCategory = "productivity" | "leisure";
 
 interface WorldStore {
   world: WorldState;
+  /** Additional development-only virtual milliseconds beyond wall time. */
+  developmentTimeOffsetMs: number;
 
   systemIdle: boolean;
   lastNonIdleCategory: NonIdleCategory;
@@ -37,7 +39,7 @@ interface WorldStore {
   recordBubblePop: () => void;
   addActivityPoints: (category: ActivityCategory, points: number) => void;
   unlockBuilding: (buildingType: string) => void;
-  advanceTime: (seconds: number, at?: number) => void;
+  advanceTime: (seconds: number, at?: number, speed?: number) => void;
   setWeather: (weather: Weather) => void;
 }
 
@@ -477,6 +479,7 @@ function dailyWeather(dayKey: string, at: number): Weather {
 
 export const useWorldStore = create<WorldStore>((set) => ({
   world: freshWorld(),
+  developmentTimeOffsetMs: 0,
 
   // --------------------------------------------------
   // System-wide idle monitoring
@@ -529,7 +532,7 @@ export const useWorldStore = create<WorldStore>((set) => ({
         world.activity.category = "idle";
       }
 
-      return { world, lastNonIdleCategory };
+      return { world, lastNonIdleCategory, developmentTimeOffsetMs: 0 };
     }),
 
   loadWorld: (savedWorld) =>
@@ -549,7 +552,7 @@ export const useWorldStore = create<WorldStore>((set) => ({
         world.activity.category = lastNonIdleCategory;
       }
 
-      return { world, lastNonIdleCategory };
+      return { world, lastNonIdleCategory, developmentTimeOffsetMs: 0 };
     }),
 
   // --------------------------------------------------
@@ -731,11 +734,14 @@ export const useWorldStore = create<WorldStore>((set) => ({
   // Simulation timer
   // --------------------------------------------------
 
-  advanceTime: (seconds, at = Date.now()) => {
+  advanceTime: (seconds, at = Date.now(), speed = 1) => {
     if (!Number.isFinite(seconds) || seconds <= 0) return;
+    const simulationSeconds = seconds * (Number.isFinite(speed) ? Math.min(256, Math.max(1, speed)) : 1);
     set(state => {
       const dayKey = getCityDayKey(new Date(at));
       let world = state.world;
+      const offset = state.developmentTimeOffsetMs + (simulationSeconds - seconds) * 1000;
+      const virtualNow = at + offset;
       if (world.cityDayKey !== dayKey) {
         world = { ...freshWorld(at), weather: dailyWeather(dayKey, at) };
       }
@@ -744,7 +750,7 @@ export const useWorldStore = create<WorldStore>((set) => ({
       // Otherwise, use the selected productivity/leisure/idle category.
       const category: ActivityCategory = state.systemIdle ? "idle" : world.activity.category;
 
-      world = { ...world, simulationTime: world.simulationTime + seconds, activity: { ...world.activity, category, [ACTIVITY_KEY[category]]: world.activity[ACTIVITY_KEY[category]] + seconds / 60 } };
+      world = { ...world, simulationTime: world.simulationTime + simulationSeconds, activity: { ...world.activity, category, [ACTIVITY_KEY[category]]: world.activity[ACTIVITY_KEY[category]] + simulationSeconds / 60, ...(speed > 1 ? { productivityPoints: world.activity.productivityPoints + simulationSeconds / 60, leisurePoints: world.activity.leisurePoints + simulationSeconds / 60, idlePoints: world.activity.idlePoints + simulationSeconds / 60 } : {}) } };
       if (world.residents.length) {
         const isNight = world.simulationTime % 600 >= 360;
         world = { ...world, residents: world.residents.map(resident => {
@@ -766,15 +772,15 @@ export const useWorldStore = create<WorldStore>((set) => ({
           if (!nextCell) return { ...resident, activity: "walking", route: [] };
           const target = residentWorldPosition(nextCell);
           const dx = target.x - resident.position.x, dz = target.z - resident.position.z, distance = Math.hypot(dx, dz);
-          const step = Math.min(distance, Math.min(seconds, 2) * 0.35);
+          const step = Math.min(distance, simulationSeconds * 0.35);
           if (distance <= step + 0.01) return { ...resident, activity: "walking", position: target, route: route.slice(1) };
           return { ...resident, activity: "walking", route, position: { ...resident.position, x: resident.position.x + dx / distance * step, z: resident.position.z + dz / distance * step } };
         }) };
       }
 
-      world = growEden(applyMilestones(world, at), seconds / 60);
+      world = growEden(applyMilestones(world, virtualNow), simulationSeconds / 60);
 
-      return { world };
+      return { world, developmentTimeOffsetMs: offset };
     });
   },
 

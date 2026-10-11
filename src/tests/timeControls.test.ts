@@ -3,12 +3,16 @@ import { nextSimulationSpeed, scaledElapsedSeconds, SIMULATION_SPEEDS } from "..
 
 describe("simulation time controls", () => {
   it("cycles through supported time multipliers and wraps back to real time", () => {
-    expect(SIMULATION_SPEEDS).toEqual([1, 2, 4, 8, 16]);
+    expect(SIMULATION_SPEEDS).toEqual([1, 2, 4, 8, 16, 32, 64, 128, 256]);
     expect(nextSimulationSpeed(1)).toBe(2);
     expect(nextSimulationSpeed(2)).toBe(4);
     expect(nextSimulationSpeed(4)).toBe(8);
     expect(nextSimulationSpeed(8)).toBe(16);
-    expect(nextSimulationSpeed(16)).toBe(1);
+    expect(nextSimulationSpeed(16)).toBe(32);
+    expect(nextSimulationSpeed(32)).toBe(64);
+    expect(nextSimulationSpeed(64)).toBe(128);
+    expect(nextSimulationSpeed(128)).toBe(256);
+    expect(nextSimulationSpeed(256)).toBe(1);
     expect(nextSimulationSpeed(99)).toBe(1);
   });
 
