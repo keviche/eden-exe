@@ -66,8 +66,8 @@ function getWaterLayout(seed: number) {
     range(BOARD_SIZE * 0.20, BOARD_SIZE * 0.29);
   const lakeZ = range(-BOARD_SIZE * 0.25, BOARD_SIZE * 0.25);
 
-  const pondRadiusX = range(0.9, 1.65);
-  const pondRadiusZ = range(0.75, 1.35);
+  const pondRadiusX = range(2.0, 3.8);
+  const pondRadiusZ = range(1.7, 3.2);
   const pondX = -lakeSide *
     range(BOARD_SIZE * 0.20, BOARD_SIZE * 0.30);
   const pondZ = range(-BOARD_SIZE * 0.30, BOARD_SIZE * 0.30);
@@ -110,9 +110,9 @@ export default function TerrainHills({
       hills.push({
         x: cx * BOARD_SIZE + range(-1.5, 1.5),
         z: cz * BOARD_SIZE + range(-1.5, 1.5),
-        radiusX: range(2.3, 4.2),
-        radiusZ: range(2.0, 3.8),
-        height: range(0.10, 0.28),
+        radiusX: range(4.5, 7.5),
+        radiusZ: range(4.0, 7.0),
+        height: range(0.35, 0.70),
         rotation: range(0, Math.PI * 2)
       });
     }
@@ -143,13 +143,32 @@ export default function TerrainHills({
 
       return Math.min(
         riverDistance,
-        ellipseDistance(water.lake),
+
         ellipseDistance(water.pond)
       );
     }
 
     function heightAt(x: number, z: number) {
-      let height = 0;
+      // Broad rolling terrain with no abrupt peaks.
+      const broadRoll =
+        Math.sin(x * 0.18 + seed * 0.17) *
+        Math.cos(z * 0.16 - seed * 0.11) * 0.22;
+
+      const secondaryRoll =
+        Math.sin(x * 0.31 + z * 0.12 + seed * 0.23) *
+        Math.cos(z * 0.27 - x * 0.10) * 0.10;
+
+      // Smooth, shallow depressions.
+      const divotField =
+        Math.sin(x * 0.24 - z * 0.21 + seed * 0.09);
+
+      const gentleDivots =
+        -Math.pow(Math.max(0, divotField), 2) * 0.075;
+
+      let height =
+        broadRoll +
+        secondaryRoll +
+        gentleDivots;
 
       for (const hill of hills) {
         const dx = x - hill.x;
@@ -168,25 +187,45 @@ export default function TerrainHills({
 
         if (radius >= 1) continue;
 
-        const falloff = Math.pow(
-          Math.max(0, 1 - radius * radius),
-          2.3
-        );
+        // Smoothly fades from the hill center to the ground.
+        const falloff =
+          Math.pow(Math.max(0, 1 - radius * radius), 2);
 
         height += hill.height * falloff;
       }
 
-      // Smoothly flatten the terrain approaching water.
-      // This prevents hills from covering the water.
+      // Preserve the water surface and create gentle banks.
       const waterDistance = distanceFromWater(x, z);
-      const shoreline = smoothstep(0.1, 1.6, waterDistance);
+      const shoreline = smoothstep(0.0, 2.4, waterDistance);
 
-      return height * shoreline;
+      // Slightly raise land around the water without
+      // creating steep walls or sudden lumps.
+      const bank =
+        0.075 *
+        (smoothstep(-0.2, 1.4, waterDistance) -
+         smoothstep(1.4, 3.5, waterDistance));
+
+      height = height * shoreline + bank;
+
+      // Prevent terrain from disappearing beneath the
+      // existing flat ground mesh.
+      height = Math.max(0.008, height);
+
+      // Smoothly fade elevation near the board edges.
+      const half = BOARD_SIZE * 0.48;
+      const edgeDistance = Math.min(
+        half - Math.abs(x),
+        half - Math.abs(z)
+      );
+
+      const edgeBlend = smoothstep(0.0, 2.5, edgeDistance);
+
+      return height * edgeBlend;
     }
 
     // One continuous surface rather than separate,
     // visibly raised green patches.
-    const divisions = 130;
+    const divisions = 160;
     const positions: number[] = [];
     const size = BOARD_SIZE * 0.96;
 
@@ -219,6 +258,7 @@ export default function TerrainHills({
       "position",
       new Float32BufferAttribute(positions, 3)
     );
+    // Recalculate normals after elevation displacement.
     geometry.computeVertexNormals();
 
     return geometry;

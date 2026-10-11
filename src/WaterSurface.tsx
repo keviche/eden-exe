@@ -5,14 +5,66 @@ import { DoubleSide, ShaderMaterial } from "three";
 type WaterKind = "river" | "lake" | "pond";
 
 const vertexShader = `
+uniform float uTime;
+uniform float uKind;
+
 varying vec3 vWorldPosition;
-varying vec3 vLocalPosition;
+varying vec2 vUv;
+varying float vSurfaceSlope;
 
 void main() {
-  vLocalPosition = position;
-  vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+  vec3 displaced = position;
+  vec2 p = position.xz;
+
+  float river = 1.0 - step(0.5, uKind);
+  float speed = mix(0.32, 1.4, river);
+
+  // Broad, smooth undulations.
+  float wave1 = sin(
+    p.y * 2.1 -
+    uTime * speed +
+    sin(p.x * 0.65) * 0.4
+  );
+
+  float wave2 = sin(
+    p.y * 3.8 -
+    uTime * speed * 1.15 +
+    p.x * 1.1
+  );
+
+  // Subtle rounded divots, not sharp geometric shapes.
+  float depression = sin(
+    p.x * 1.4 +
+    p.y * 1.8 -
+    uTime * speed * 0.75
+  );
+
+  depression = -pow(
+    max(0.0, depression),
+    2.0
+  );
+
+  float amplitude = mix(0.025, 0.055, river);
+
+  float displacement =
+    wave1 * amplitude * 0.55 +
+    wave2 * amplitude * 0.22 +
+    depression * amplitude * 0.38;
+
+  displaced.y += displacement;
+
+  // Slight shading variation for surface depth.
+  vSurfaceSlope = displacement / max(amplitude, 0.001);
+
+  vUv = position.xz;
+
+  vec4 worldPosition =
+    modelMatrix * vec4(displaced, 1.0);
+
   vWorldPosition = worldPosition.xyz;
-  gl_Position = projectionMatrix * viewMatrix * worldPosition;
+
+  gl_Position =
+    projectionMatrix * viewMatrix * worldPosition;
 }
 `;
 
@@ -21,93 +73,75 @@ uniform float uTime;
 uniform float uKind;
 
 varying vec3 vWorldPosition;
-varying vec3 vLocalPosition;
-
-float hash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-
-  return mix(
-    mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
-    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
-    f.y
-  );
-}
+varying vec2 vUv;
+varying float vSurfaceSlope;
 
 void main() {
-  vec2 p = vLocalPosition.xz;
   float t = uTime;
 
-  float river = 1.0 - step(0.5, uKind);
+  // River moves faster; pond moves slowly.
+  float isRiver = 1.0 - step(0.5, uKind);
+  float speed = mix(0.18, 1.15, isRiver);
 
-  // River flows consistently along its length.
-  // Lakes and ponds have slower multidirectional movement.
-  vec2 flow = mix(
-    vec2(
-      sin(t * 0.12) * 0.10,
-      t * 0.12
-    ),
-    vec2(
-      0.12 * sin(t * 0.2),
-      -t * 0.55
-    ),
-    river
+  vec2 p = vUv;
+
+  // Smooth, broad movement instead of sharp shapes.
+  float wave1 = sin(
+    p.y * 3.2 -
+    t * speed +
+    sin(p.x * 0.8) * 0.35
   );
 
-  vec2 uv = p + flow;
-
-  float largeWave =
-    sin(uv.x * 2.8 + uv.y * 1.6 + t * 0.4) * 0.5 + 0.5;
-
-  float smallWave =
-    sin(uv.x * 8.0 - uv.y * 4.0 + t * 0.9) * 0.5 + 0.5;
-
-  float detail = noise(uv * 5.5 + t * 0.08);
-
-  float ripple =
-    largeWave * 0.45 +
-    smallWave * 0.3 +
-    detail * 0.25;
-
-  vec3 deepBlue = vec3(0.025, 0.42, 0.56);
-  vec3 turquoise = vec3(0.035, 0.73, 0.82);
-  vec3 brightCyan = vec3(0.28, 0.93, 0.97);
-
-  vec3 color = mix(deepBlue, turquoise, ripple);
-  color = mix(
-    color,
-    brightCyan,
-    pow(smallWave, 5.0) * 0.22
+  float wave2 = sin(
+    p.y * 5.5 -
+    t * speed * 1.25 +
+    p.x * 0.65
   );
 
-  // Moving highlights simulate reflections on water.
-  float highlight =
-    pow(
-      max(
-        0.0,
-        sin(uv.x * 12.0 + uv.y * 4.0 + t * 1.3)
-      ),
-      18.0
-    );
+  float wave3 = sin(
+    p.x * 2.0 +
+    p.y * 1.4 -
+    t * speed * 0.55
+  );
 
-  color += vec3(0.32, 0.48, 0.52) * highlight * 0.35;
+  // Low contrast keeps the surface smooth.
+  float movement =
+    wave1 * 0.055 +
+    wave2 * 0.025 +
+    wave3 * 0.015;
 
-  // Small, bright streaks resemble river surface foam.
-  float foam =
-    pow(
-      max(
-        0.0,
-        sin(uv.x * 5.0 - uv.y * 11.0 + t * 2.2)
-      ),
-      20.0
-    );
+  vec3 deepWater = vec3(0.035, 0.49, 0.66);
+  vec3 clearWater = vec3(0.055, 0.75, 0.83);
 
-  color += vec3(0.55, 0.9, 0.95) * foam * river * 0.11;
+  float blend = clamp(
+    0.58 + movement,
+    0.0,
+    1.0
+  );
+
+  vec3 color = mix(deepWater, clearWater, blend);
+
+  // Very subtle moving sheen, without foam shapes.
+  float sheen = sin(
+    p.y * 4.0 -
+    t * speed * 0.85 +
+    p.x * 0.4
+  );
+
+  sheen = smoothstep(0.7, 1.0, sheen);
+
+  color += vec3(0.12, 0.18, 0.19) * sheen * 0.11;
+
+  // Gentle brightness variation across the surface.
+  float softLight = sin(
+    p.x * 0.35 +
+    p.y * 0.45 +
+    t * 0.12
+  );
+
+  color += vec3(0.015, 0.025, 0.025) * softLight;
+
+  color += vec3(0.015, 0.025, 0.03) * vSurfaceSlope;
 
   gl_FragColor = vec4(color, 1.0);
 }

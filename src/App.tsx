@@ -8,7 +8,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import {
   BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, Color, ConeGeometry, CylinderGeometry,
-  ExtrudeGeometry, Float32BufferAttribute, IcosahedronGeometry, Matrix4, Shape as ThreeShape, ShapeGeometry, SphereGeometry, TubeGeometry, Vector3,
+  ExtrudeGeometry, Float32BufferAttribute, IcosahedronGeometry, Matrix4, Shape as ThreeShape, SphereGeometry, TubeGeometry, Vector3,
 } from "three";
 import type { InstancedMesh } from "three";
 import {
@@ -116,14 +116,28 @@ function createRoundedGroundShape() {
   shape.lineTo(-half, -half + radius); shape.quadraticCurveTo(-half, -half, -half + radius, -half);
   return shape;
 }
-const GROUND_GEOMETRY = new ShapeGeometry(createRoundedGroundShape(), 8).rotateX(-Math.PI / 2);
-const SOIL_GEOMETRY = new ExtrudeGeometry(createRoundedGroundShape(), { depth: TERRAIN_LIFT - 0.25, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.1, bevelThickness: 0.08, steps: 1 }).rotateX(-Math.PI / 2);
+const SOIL_GEOMETRY = new ExtrudeGeometry(createRoundedGroundShape(), { depth: TERRAIN_LIFT - 0.25, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.1, bevelThickness: 0.08, steps: 1 }).rotateX(-Math.PI / 2).scale((TANK_WIDTH - 0.35) / BOARD_SIZE, 1, (TANK_WIDTH - 0.35) / BOARD_SIZE);
 
 function TankEnclosure({ night }: { night: boolean }) {
-  const wall = useMemo(() => createTankWallGeometry(), []);
+  const wall = useMemo(() => {
+    const geometry = createTankWallGeometry();
+    const positions = geometry.getAttribute('position');
+    for (let i = 0; i < positions.count; i++) {
+      const y = positions.getY(i);
+      const normalized = y / TANK_HEIGHT;
+      positions.setY(
+        i,
+        -TERRAIN_LIFT + normalized * (TANK_HEIGHT + TERRAIN_LIFT)
+      );
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }, []);
   const rim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, TANK_HEIGHT), true, "centripetal"), 120, 0.075, 8, true), []);
   const innerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2 - 0.14, TANK_WIDTH / 2 - 0.14, TANK_RADIUS - 0.12, TANK_HEIGHT - 0.035), true, "centripetal"), 120, 0.035, 8, true), []);
-  const lowerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, 0.08), true, "centripetal"), 120, 0.045, 8, true), []);
+  const lowerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, -TERRAIN_LIFT + 0.08), true, "centripetal"), 120, 0.045, 8, true), []);
   const frontGlints = useMemo(() => [-1, 1].map(side => new TubeGeometry(new CatmullRomCurve3([
     new Vector3(side * (TANK_WIDTH / 2 - TANK_RADIUS), 0.25, TANK_WIDTH / 2),
     new Vector3(side * (TANK_WIDTH / 2 - TANK_RADIUS), TANK_HEIGHT - 0.18, TANK_WIDTH / 2),
@@ -274,8 +288,8 @@ function WaterCourse({ seed }: { seed: number }) {
       BOARD_SIZE * 0.25
     );
 
-    const pondRadiusX = range(0.9, 1.65);
-    const pondRadiusZ = range(0.75, 1.35);
+    const pondRadiusX = range(2.0, 3.8);
+    const pondRadiusZ = range(1.7, 3.2);
 
     const pondX = -lakeSide *
       range(BOARD_SIZE * 0.20, BOARD_SIZE * 0.30);
@@ -284,21 +298,18 @@ function WaterCourse({ seed }: { seed: number }) {
       BOARD_SIZE * 0.30
     );
 
-    const lake = makeWaterBody(
-      lakeX, lakeZ, lakeRadiusX, lakeRadiusZ
-    );
 
     const pond = makeWaterBody(
       pondX, pondZ, pondRadiusX, pondRadiusZ
     );
 
-    return { river, lake, pond };
+    return { river, pond };
   }, [seed]);
 
   useEffect(() => {
     return () => {
       layout.river.dispose();
-      layout.lake.dispose();
+      
       layout.pond.dispose();
     };
   }, [layout]);
@@ -309,9 +320,7 @@ function WaterCourse({ seed }: { seed: number }) {
         <WaterSurface kind="river" />
       </mesh>
 
-      <mesh geometry={layout.lake} receiveShadow>
-        <WaterSurface kind="lake" />
-      </mesh>
+      
 
       <mesh geometry={layout.pond} receiveShadow>
         <WaterSurface kind="pond" />
@@ -634,9 +643,6 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
       <group position={[0, TERRAIN_LIFT, 0]}>
       <mesh position={[0, -TERRAIN_LIFT + 0.12, 0]} receiveShadow castShadow geometry={SOIL_GEOMETRY}>
         <meshStandardMaterial color={night ? "#4a3429" : "#573722"} roughness={0.96} />
-      </mesh>
-      <mesh position={[0, 0.004, 0]} receiveShadow geometry={GROUND_GEOMETRY}>
-        <meshStandardMaterial color={night ? "#168451" : "#25c653"} roughness={0.76} />
       </mesh>
       <MossBanks night={night} />
       <TerrainHills seed={waterSeed} night={night} />
