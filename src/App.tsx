@@ -1,3 +1,4 @@
+import TerrariumSky from "./TerrariumSky";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
@@ -66,11 +67,7 @@ const TERRAIN_LIFT = 4;
 const CAMERA_POSITION: [number, number, number] = [BOARD_SIZE * 0.78, BOARD_SIZE * 1.08, BOARD_SIZE * 1.95];
 const CAMERA_OPTIONS = { position: CAMERA_POSITION, fov: 34, near: 0.1, far: BOARD_SIZE * 8 };
 const DPR_RANGE: [number, number] = [1, 1.25];
-const GL_OPTIONS = {
-  antialias: true,
-  alpha: true,
-  powerPreference: "low-power" as const,
-};
+const GL_OPTIONS = { antialias: true, powerPreference: "low-power" as const };
 const ORBIT_TARGET: [number, number, number] = [0, TANK_HEIGHT * 0.36, 0];
 const createRendererId = (type: string) => `${type}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 
@@ -458,8 +455,12 @@ const World = memo(function World({ showGrid, shadows }: { showGrid: boolean; sh
   const weather = useWorldStore(state => state.world.weather);
   const simulationTime = useWorldStore(state => state.world.simulationTime);
   const phase = getDayPhase(simulationTime);
+  const sky = weather.condition === "rainy" ? (night ? "#263c4a" : "#d7e5dc") : weather.condition === "cloudy" ? (night ? "#263f4a" : "#d3e9e7") : phase === "sunset" ? "#ffd6a2" : (night ? "#102b36" : "#bceaf1");
   return (
     <>
+      <color attach="background" args={[sky]} />
+      {/* Start beyond the map at the default view; avoids washing out buildings. */}
+      <fog attach="fog" args={[sky, BOARD_SIZE * 3.5, BOARD_SIZE * 6]} />
       <hemisphereLight args={[night ? "#82d6ff" : "#f5ffff", night ? "#184b55" : "#63c579", night ? 0.7 : 0.82]} />
       <ambientLight intensity={weather.condition === "rainy" ? 0.58 : weather.condition === "cloudy" ? 0.82 : night ? 0.7 : 1.02} color={night ? "#83b5dc" : "#eaffff"} />
       <directionalLight
@@ -609,6 +610,7 @@ function App() {
       window.removeEventListener("wheel", onInput);
     };
   }, [advanceTime, recordInput, setActivityCategory]);
+  
   function handleAddBuilding() {
     const config = BUILDING_CATALOG.find(entry => entry.id === variant)!;
     // Read current state at click time, including rapid successive additions.
@@ -640,20 +642,15 @@ function App() {
   }
 
   return (
-    <main className="app" style={{ position: "relative", width: "100vw", height: "100vh", background: "transparent" }}>
+    <main className="app" style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <Canvas
         shadows={shadows}
         frameloop="demand"
         camera={CAMERA_OPTIONS}
         dpr={DPR_RANGE}
         gl={GL_OPTIONS}
-        style={{ background: "transparent" }}
-        onCreated={({ gl, scene }) => {
-          // Empty pixels stay transparent so Electron can composite the desktop.
-          scene.background = null;
-          gl.setClearColor(0x000000, 0);
-        }}
       >
+        <TerrariumSky />
         <World showGrid={showGrid} shadows={shadows} />
       </Canvas>
       <div style={panelOpen ? PANEL_STYLE : { ...PANEL_STYLE, width: "auto", padding: 7 }}>
