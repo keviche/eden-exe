@@ -3,7 +3,7 @@ import { useWorldStore } from "./state/worldStore";
 import { BOARD_SIZE } from "./edenModels";
 import { useFrame, useThree } from "@react-three/fiber";
 import type { ThreeEvent } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { memo, useMemo, useRef } from "react";
 import {
   AdditiveBlending,
   BackSide,
@@ -314,7 +314,7 @@ function BubbleMesh({ bubble }: { bubble: Bubble }) {
   );
 }
 
-export default function SkyBubbles() {
+export default memo(function SkyBubbles() {
   const bubbles = useMemo(() => {
     const random = randomGenerator(20261011);
 
@@ -393,4 +393,4 @@ export default function SkyBubbles() {
       ))}
     </group>
   );
-}
+});

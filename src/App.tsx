@@ -240,7 +240,7 @@ const SOIL_GEOMETRY = new ExtrudeGeometry(
   }
 ).rotateX(-Math.PI / 2);
 
-function TankEnclosure({ night }: { night: boolean }) {
+const TankEnclosure = memo(function TankEnclosure({ night }: { night: boolean }) {
   const wall = useMemo(() => createTankWallGeometry(), []);
   const rim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2, TANK_WIDTH / 2, TANK_RADIUS, TANK_HEIGHT), true, "centripetal"), 120, 0.075, 8, true), []);
   const innerRim = useMemo(() => new TubeGeometry(new CatmullRomCurve3(roundedPerimeter(TANK_WIDTH / 2 - 0.14, TANK_WIDTH / 2 - 0.14, TANK_RADIUS - 0.12, TANK_HEIGHT - 0.035), true, "centripetal"), 120, 0.035, 8, true), []);
@@ -263,7 +263,7 @@ function TankEnclosure({ night }: { night: boolean }) {
     {glintPoints.map((geometry, index) => <mesh key={index} geometry={geometry} renderOrder={7}><meshBasicMaterial color="#ffffff" transparent opacity={0.68} /></mesh>)}
     {frontGlints.map((geometry, index) => <mesh key={`front-${index}`} geometry={geometry} renderOrder={7}><meshBasicMaterial color="#f3ffff" transparent opacity={0.44} /></mesh>)}
   </group>;
-}
+});
 
 function waterRandom(seed: number) {
   let state = seed >>> 0;
@@ -274,7 +274,7 @@ function waterRandom(seed: number) {
   };
 }
 
-function WaterCourse({ seed }: { seed: number }) {
+const WaterCourse = memo(function WaterCourse({ seed }: { seed: number }) {
   const layout = useMemo(() => {
     const random = waterRandom(seed);
     const range = (min: number, max: number) =>
@@ -434,9 +434,9 @@ function WaterCourse({ seed }: { seed: number }) {
       </mesh>
     </group>
   );
-}
+});
 
-function MossBanks({ night }: { night: boolean }) {
+const MossBanks = memo(function MossBanks({ night }: { night: boolean }) {
   const ref = useRef<InstancedMesh>(null);
   const invalidate = useThree(state => state.invalidate);
   const geometry = useMemo(() => new SphereGeometry(1, 12, 8), []);
@@ -469,7 +469,7 @@ function MossBanks({ night }: { night: boolean }) {
   return <instancedMesh ref={ref} args={[geometry, undefined, patches.length]} receiveShadow>
     <meshStandardMaterial color={night ? "#c0e4c9" : "#ffffff"} roughness={0.88} />
   </instancedMesh>;
-}
+});
 const PANEL_STYLE: CSSProperties = {
   position: "absolute", top: 12, left: 12, zIndex: 10,
   display: "flex", flexDirection: "column", gap: 8, width: 224,
@@ -699,7 +699,7 @@ function BuildingsLayer({ night, onSelectBuilding }: { night: boolean; onSelectB
   />)}</>;
 }
 
-function PlantsLayer({ night }: { night: boolean }) {
+const PlantsLayer = memo(function PlantsLayer({ night }: { night: boolean }) {
   const plants = useWorldStore(selectPlants);
   const batches = useMemo(() => {
     const parts: Part[] = [];
@@ -730,9 +730,9 @@ function PlantsLayer({ night }: { night: boolean }) {
     return batchParts(parts);
   }, [plants]);
   return <BatchLayer batches={batches} night={night} />;
-}
+});
 
-function ResidentsLayer({ night }: { night: boolean }) {
+const ResidentsLayer = memo(function ResidentsLayer({ night }: { night: boolean }) {
   const residents = useWorldStore(selectResidents);
   const batches = useMemo(() => {
     const parts: Part[] = [];
@@ -744,7 +744,7 @@ function ResidentsLayer({ night }: { night: boolean }) {
     return batchParts(parts);
   }, [residents]);
   return <BatchLayer batches={batches} night={night} />;
-}
+});
 
 function useNight() {
   const simulationTime = useWorldStore(state => state.world.simulationTime);

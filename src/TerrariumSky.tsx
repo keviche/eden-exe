@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import * as THREE from "three";
 
 function RainbowBand({
@@ -52,7 +52,7 @@ function RainbowBand({
   );
 }
 
-export default function TerrariumSky() {
+export default memo(function TerrariumSky() {
   return (
     <group position={[0, 0, 0]}>
       {/* Rainbow positioned behind the city */}
@@ -96,4 +96,4 @@ export default function TerrariumSky() {
       </group>
     </group>
   );
-}
+});
