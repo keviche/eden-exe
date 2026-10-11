@@ -450,34 +450,8 @@ function App() {
       unsubscribe();
     };
   }, [setSystemIdle]);
-  // Simulation state
-  const advanceTime = useWorldStore(
-    (state) => state.advanceTime
-  );
-
-  const recordInput = useWorldStore(
-    (state) => state.recordInput
-  );
-
-  const setActivityCategory = useWorldStore(
-    (state) => state.setActivityCategory
-  );
-
-  const activity = useWorldStore(selectActivity);
-
-  // Building state
-  const buildings = useWorldStore(selectBuildings);
-
-  const addBuilding = useWorldStore(
-    (state) => state.addBuilding
-  );
-
-  const resetWorld = useWorldStore(
-    (state) => state.resetWorld
-  );
 
   // Simulation timer and activity tracking
-    // Simulation timer and activity tracking
   const advanceTime = useWorldStore(state => state.advanceTime);
   const recordInput = useWorldStore(state => state.recordInput);
   const setActivityCategory = useWorldStore(state => state.setActivityCategory);
@@ -507,22 +481,12 @@ function App() {
       previous = now;
     }, 1_000);
     const onInput = (event: Event) => {
-      if (
-        event instanceof KeyboardEvent &&
-        event.altKey &&
-        ["1", "2"].includes(event.key)
-      ) {
       const target = event.target;
       const editing = target instanceof HTMLElement && (target.isContentEditable || !!target.closest("input, textarea, select"));
       if (!editing && event instanceof KeyboardEvent && event.altKey && ["Digit1", "Digit2", "Digit3"].includes(event.code)) {
         event.preventDefault();
         recordInput();
         setActivityCategory(event.code === "Digit1" ? "productivity" : event.code === "Digit2" ? "leisure" : "idle");
-
-        setActivityCategory(
-          event.key === "1" ? "productivity" : "leisure"
-        );
-
         return;
       }
       // Wheel events can arrive dozens of times per second.
