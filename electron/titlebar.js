@@ -16,3 +16,20 @@ window.titlebarAPI.setPlacementListener((placement) => {
   bar.classList.toggle("above", placement === "above");
   bar.classList.toggle("below", placement === "below");
 });
+
+// Drag the entire EDEN.EXE window from the toolbar.
+const dragSurface = document.getElementById("titlebar");
+
+dragSurface.addEventListener("mousedown", (event) => {
+  if (event.button !== 0 || event.target.closest(".controls")) return;
+  window.titlebarAPI.startDrag();
+  event.preventDefault();
+});
+
+window.addEventListener("mouseup", () => {
+  window.titlebarAPI.endDrag();
+});
+
+window.addEventListener("blur", () => {
+  window.titlebarAPI.endDrag();
+});
