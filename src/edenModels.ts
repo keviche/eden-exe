@@ -47,7 +47,6 @@ export function cellPoint(x: number, z: number) {
 
 export function buildingDimensions(footprint: { width: number; depth: number }, rotation: number) {
   const quarterTurn = Math.abs(Math.round(rotation / (Math.PI / 2))) % 2 === 1;
-  // Padding belongs to the model's local axes (the entrance needs more space).
   const columns = quarterTurn ? footprint.depth : footprint.width;
   const rows = quarterTurn ? footprint.width : footprint.depth;
   return { width: Math.max(0.8, columns * CELL_SIZE - 0.35), depth: Math.max(0.8, rows * CELL_SIZE - 0.5) };
@@ -67,7 +66,6 @@ export function hasExplicitGrowth(item: GrowthSource) {
 
 export function buildingProgress(item: GrowthSource, now: number) {
   if (hasExplicitGrowth(item)) return clamp01(item.growth!);
-  // Missing/invalid dates produce a mature legacy building, rather than a flicker.
   if (!Number.isFinite(item.createdAt)) return 1;
   return clamp01((now - item.createdAt) / (BUILDING_GROWTH_SECONDS * 1_000));
 }
@@ -211,6 +209,15 @@ function flatRoof(b: Builder, width: number, depth: number, y: number) {
   }
 }
 
+function addMoss(b: Builder, width: number, depth: number, y: number, amount: number, seed: number) {
+  const patches = Math.min(5, Math.ceil(clamp01(amount) * 5));
+  for (let patch = 0; patch < patches; patch++) {
+    const x = ((patch * 37 + seed) % 7 - 3) * width / 8;
+    const z = ((patch * 19 + seed) % 7 - 3) * depth / 8;
+    b.foliage([x, y + 0.07, z], 0.12 + (patch % 2) * 0.035, patch % 2 ? "#6d9d69" : "#82ae70");
+  }
+}
+
 function buildBuilding(variant: string, width: number, depth: number, stage: number, seed: number, floorsOverride?: number, moss = 0): Model {
   const b = new Builder();
   const base = 0.12;
@@ -221,22 +228,22 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
   // Foundation pad
   b.box([width + 0.1, base, depth + 0.1], [0, base / 2, 0], "#acb6a4");
 
-  // --- ALL-GLASS STREAMLINE MODERNE STYLE FOR SOLAR HOUSE ---
+  // --- GLASS-HEAVY STREAMLINE MODERNE WITH TOP GLASS DOME FOR SOLAR HOUSE ---
   if (variant === "solar-house") {
     const radius = Math.min(width, depth) * 0.38;
     
+    // Floors stack upward from the ground, keeping the dome permanently on top
     for (let floor = 0; floor < floors; floor++) {
       const y = base + floor * floorHeight;
-      const isTop = floor === floors - 1;
 
-      // Main structural body replaced with transparent glass cylinder
+      // Main structural body made of transparent glass
       b.add("cylinder", [0, y + floorHeight / 2, 0], [radius, floorHeight, radius], "#70e5f3", [0, 0, 0], "glass");
       
-      // Teal tile base wainscoting around the bottom of each floor
+      // Teal tile wainscoting band around the bottom of each floor
       b.add("cylinder", [0, y + 0.10, 0], [radius * 1.01, 0.20, radius * 1.01], "#35a79c");
       b.add("cylinder", [0, y + 0.20, 0], [radius * 1.02, 0.04, radius * 1.02], "#d0ecea"); // Chrome trim line
 
-      // Extra large wrap-around glass ribbon windows/panels for full transparency
+      // Wrap-around ribbon windows
       for (let face = 0; face < 4; face++) {
         const angle = (face * Math.PI) / 2;
         const wx = Math.sin(angle) * radius * 0.94;
@@ -244,34 +251,36 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
         
         if (floor > 0 || face !== 0) {
           b.group([wx, y + floorHeight * 0.55, wz], [0, angle, 0], [1, 1, 1], () => {
-            b.box([0.62, 0.44, 0.03], [0, 0, 0], "#d0ecea"); // Thin chrome framing
-            b.box([0.56, 0.38, 0.015], [0, 0, 0.02], "#a6f7ff", [0, 0, 0], "glass"); // Full crystal glass pane
+            b.box([0.62, 0.44, 0.03], [0, 0, 0], "#d0ecea"); // Chrome frame
+            b.box([0.56, 0.38, 0.015], [0, 0, 0.02], "#a6f7ff", [0, 0, 0], "glass"); // Glass pane
           });
         }
       }
 
-      // Inter-floor chrome/glass divider rim
-      if (!isTop) {
+      // Inter-floor chrome divider ring
+      if (floor < floors - 1) {
         b.add("cylinder", [0, y + floorHeight, 0], [radius * 1.04, 0.06, radius * 1.04], "#e2f2f1");
-      } else {
-        // Streamline Moderne curved overhanging roof on the top floor with glass accents
-        b.add("cylinder", [0, y + floorHeight + 0.04, 0], [radius * 1.15, 0.08, radius * 1.15], "#f3f0eb");
-        b.add("cylinder", [0, y + floorHeight + 0.09, 0], [radius * 1.18, 0.04, radius * 1.18], "#d0ecea"); // Chrome lip
       }
     }
 
-    // Ground floor glass-paneled entrance and overhanging canopy
+    // --- GLASS DOME CROWN ON TOP ---
+    const topY = base + floors * floorHeight;
+    b.add("cylinder", [0, topY, 0], [radius * 1.06, 0.06, radius * 1.06], "#d0ecea"); // Chrome dome base collar
+    b.add("sphere", [0, topY + 0.18, 0], [radius * 0.96, radius * 0.65, radius * 0.96], "#70e5f3", [0, 0, 0], "glass"); // Glass dome roof
+    b.add("cylinder", [0, topY + 0.38, 0], [radius * 0.2, 0.08, radius * 0.2], "#d0ecea"); // Chrome rooftop cap/spire
+
+    // Ground floor entrance and marquee canopy
     const frontZ = depth / 2;
-    b.box([0.46, 0.68, 0.05], [0, base + 0.34, frontZ], "#d0ecea"); // Chrome door frame
-    b.box([0.36, 0.58, 0.025], [0, base + 0.34, frontZ + 0.02], "#a6f7ff", [0, 0, 0], "glass"); // Glass door
+    b.box([0.46, 0.68, 0.05], [0, base + 0.34, frontZ], "#d0ecea");
+    b.box([0.36, 0.58, 0.025], [0, base + 0.34, frontZ + 0.02], "#a6f7ff", [0, 0, 0], "glass");
     b.box([0.7, 0.06, 0.35], [0, base + floorHeight * 0.65, frontZ + 0.12], "#f3f0eb");
     b.add("cylinder", [0, base + floorHeight * 0.65 + 0.03, frontZ + 0.12], [0.35, 0.04, 0.2], "#35a79c");
 
-    addMoss(b, width, depth, base + floors * floorHeight + 0.1, moss, seed);
+    addMoss(b, width, depth, topY + 0.45, moss, seed);
     return b.parts;
   }
 
-  // --- FALLBACK LOGIC FOR ALL OTHER VARIANTS ---
+  // --- FALLBACK LOGIC FOR ALL OTHER BUILDING VARIANTS ---
   const colors = ["#e8bd7d", "#f2d49a", "#c98f5e", "#f5e0b1"];
   const wallColor = colors[seed % colors.length]!;
 
@@ -337,15 +346,6 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
   entrance(b, width, depth, stage);
   addMoss(b, width, depth, roofY + 0.16, moss, seed);
   return b.parts;
-}
-
-function addMoss(b: Builder, width: number, depth: number, y: number, amount: number, seed: number) {
-  const patches = Math.min(5, Math.ceil(clamp01(amount) * 5));
-  for (let patch = 0; patch < patches; patch++) {
-    const x = ((patch * 37 + seed) % 7 - 3) * width / 8;
-    const z = ((patch * 19 + seed) % 7 - 3) * depth / 8;
-    b.foliage([x, y + 0.07, z], 0.12 + (patch % 2) * 0.035, patch % 2 ? "#6d9d69" : "#82ae70");
-  }
 }
 
 function buildPlant(species: string, seed: number): Model {
@@ -452,9 +452,6 @@ export function findFreePlot(buildings: readonly Plot[], plants: readonly Plot[]
       for (let x = Math.max(0, left); x < Math.min(GRID_SIZE, right); x++) occupied[z * GRID_SIZE + x] = 1;
     }
   }
-  // Grow a compact little village around the center rather than filling the
-  // back edge first. This keeps the first activity-driven structures visible
-  // and gives later additions room to spread naturally across the same grid.
   const candidates: { x: number; z: number; distance: number }[] = [];
   const centerX = (GRID_SIZE - width) / 2, centerZ = (GRID_SIZE - depth) / 2;
   for (let z = 0; z <= GRID_SIZE - depth; z++) for (let x = 0; x <= GRID_SIZE - width; x++) {
