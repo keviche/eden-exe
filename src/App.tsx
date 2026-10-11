@@ -1,4 +1,5 @@
 import TerrariumSky from "./TerrariumSky";
+import SkyBubbles from "./SkyBubbles";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
@@ -651,12 +652,13 @@ function App() {
     >
       <Canvas
         shadows={shadows}
-        frameloop="demand"
+        frameloop="always"
         camera={CAMERA_OPTIONS}
         dpr={DPR_RANGE}
         gl={GL_OPTIONS}
       >
         <TerrariumSky />
+        <SkyBubbles />
         <World showGrid={showGrid} shadows={shadows} />
       </Canvas>
       <div style={{
