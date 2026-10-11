@@ -1,6 +1,8 @@
 import WaterSurface from "./WaterSurface";
 import TerrainHills from "./TerrainHills";
 import TerrariumSky from "./TerrariumSky";
+import AeroAtmosphere from "./AeroAtmosphere";
+import AeroGlassMaterial from "./AeroGlassMaterial";
 import SkyBubbles from "./SkyBubbles";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -256,7 +258,7 @@ const TankEnclosure = memo(function TankEnclosure({ night }: { night: boolean })
   }, []);
   return <group>
     <mesh geometry={wall} renderOrder={4}>
-      <meshPhysicalMaterial color={night ? "#8aeafa" : "#b5f5fb"} transparent opacity={night ? 0.2 : 0.18} roughness={0.08} metalness={0} transmission={0.1} thickness={0.24} ior={1.33} side={2} depthWrite={false} />
+      <AeroGlassMaterial night={night} />
     </mesh>
     <mesh geometry={rim} renderOrder={6}><meshStandardMaterial color="#ecffff" roughness={0.12} metalness={0.05} emissive="#75f2ff" emissiveIntensity={night ? 0.34 : 0.18} /></mesh>
     <mesh geometry={innerRim} renderOrder={6}><meshStandardMaterial color="#bdffff" roughness={0.08} metalness={0.06} emissive="#5adff0" emissiveIntensity={0.16} /></mesh>
@@ -445,7 +447,7 @@ const MossBanks = memo(function MossBanks({ night }: { night: boolean }) {
     const mesh = ref.current;
     if (!mesh) return;
     const matrix = new Matrix4();
-    const colors = ["#47b85b", "#55c564", "#68ce69", "#3da857"];
+    const colors = ["#51e96d", "#78ed67", "#8df871", "#2fc96b"];
     patches.forEach((patch, index) => {
       matrix.makeScale(patch.sx, 0.13 + index % 3 * 0.018, patch.sz).setPosition(patch.x, 0.075, patch.z);
       mesh.setMatrixAt(index, matrix);
@@ -458,7 +460,7 @@ const MossBanks = memo(function MossBanks({ night }: { night: boolean }) {
     invalidate();
   }, [patches, invalidate]);
   return <instancedMesh ref={ref} args={[geometry, undefined, patches.length]} receiveShadow>
-    <meshStandardMaterial color={night ? "#c0e4c9" : "#ffffff"} roughness={0.88} />
+    <meshStandardMaterial color={night ? "#add6cb" : "#ffffff"} roughness={0.62} metalness={0.02} />
   </instancedMesh>;
 });
 const PANEL_STYLE: CSSProperties = {
@@ -530,15 +532,18 @@ const InstanceBatch = memo(function InstanceBatch({
       <meshPhysicalMaterial
         color="#ffffff"
         transparent={glass || greenhouse}
-        opacity={glass ? 0.4 : greenhouse ? 0.18 : 1}
+        opacity={glass ? 0.46 : greenhouse ? 0.25 : 1}
         depthWrite={!glass && !greenhouse}
         side={2}
-        roughness={glass || greenhouse ? 0.12 : solar ? 0.2 : metal ? 0.32 : 0.78}
-        metalness={glass || greenhouse ? 0.04 : solar ? 0.3 : metal ? 0.36 : 0}
-        emissive={glass ? "#fff0ab" : greenhouse ? "#8af5df" : "#000000"}
-        emissiveIntensity={glass ? (night ? 0.58 : 0.16) : greenhouse ? (night ? 0.12 : 0.045) : 0}
-        clearcoat={glass || greenhouse ? 0.7 : solar ? 0.9 : 0.12}
-        clearcoatRoughness={glass || greenhouse ? 0.06 : solar ? 0.12 : 0.32}
+        roughness={glass || greenhouse ? 0.055 : solar ? 0.13 : metal ? 0.22 : 0.53}
+        metalness={glass || greenhouse ? 0.08 : solar ? 0.43 : metal ? 0.42 : 0.025}
+        emissive={glass ? "#67dff2" : greenhouse ? "#8af5df" : "#000000"}
+        emissiveIntensity={glass ? (night ? 0.33 : 0.09) : greenhouse ? (night ? 0.14 : 0.035) : 0}
+        clearcoat={glass || greenhouse ? 1.0 : solar ? 0.95 : metal ? 0.78 : 0.32}
+        clearcoatRoughness={glass || greenhouse ? 0.04 : solar ? 0.07 : metal ? 0.1 : 0.28}
+        iridescence={glass || greenhouse ? 0.66 : solar ? 0.16 : 0}
+        iridescenceIOR={1.28}
+        iridescenceThicknessRange={[180, 450]}
         flatShading={!glass && !greenhouse && !metal}
       />
     </instancedMesh>
@@ -749,17 +754,18 @@ const World = memo(function World({ showGrid, shadows, onSelectBuilding }: { sho
   const waterSeed = useWorldStore(state => state.world.waterSeed ?? 1);
   const simulationTime = useWorldStore(state => state.world.simulationTime);
   const phase = getDayPhase(simulationTime);
-  const sky = weather.condition === "rainy" ? (night ? "#263c4a" : "#d7e5dc") : weather.condition === "cloudy" ? (night ? "#263f4a" : "#d3e9e7") : phase === "sunset" ? "#ffd6a2" : (night ? "#102b36" : "#bceaf1");
+  const sky = night ? "#244d80" : phase === "sunset" ? "#ffe3b5" : weather.condition === "rainy" ? "#add9e5" : "#c5f5ff";
   return (
     <>
       <color attach="background" args={[sky]} />
+      <AeroAtmosphere phase={phase} weather={weather.condition} />
       {/* Start beyond the map at the default view; avoids washing out buildings. */}
       <fog attach="fog" args={[sky, BOARD_SIZE * 3.5, BOARD_SIZE * 6]} />
-      <hemisphereLight args={[night ? "#82d6ff" : "#f5ffff", night ? "#184b55" : "#63c579", night ? 0.7 : 0.82]} />
-      <ambientLight intensity={weather.condition === "rainy" ? 0.58 : weather.condition === "cloudy" ? 0.82 : night ? 0.7 : 1.02} color={night ? "#83b5dc" : "#eaffff"} />
+      <hemisphereLight args={[night ? "#83b9e9" : "#e9ffff", night ? "#173c64" : "#58d77a", night ? 0.67 : 0.9]} />
+      <ambientLight intensity={weather.condition === "rainy" ? 0.57 : weather.condition === "cloudy" ? 0.77 : night ? 0.62 : 0.88} color={night ? "#88b3e7" : "#edffff"} />
       <directionalLight
-        position={[-BOARD_SIZE * 0.6, BOARD_SIZE, BOARD_SIZE * 0.6]}
-        intensity={weather.condition === "rainy" ? 0.72 : weather.condition === "cloudy" ? 1.25 : phase === "sunset" ? 1.55 : night ? 0.65 : 2.25}
+        position={[BOARD_SIZE * 0.6, BOARD_SIZE * 0.9, -BOARD_SIZE * 0.65]}
+        intensity={weather.condition === "rainy" ? 0.74 : weather.condition === "cloudy" ? 1.18 : phase === "sunset" ? 1.45 : night ? 0.54 : 1.78}
         color={night ? "#9bc7ff" : phase === "sunset" ? "#ffe0b5" : "#ffffff"}
         castShadow={shadows}
         shadow-mapSize-width={1024}
@@ -774,7 +780,7 @@ const World = memo(function World({ showGrid, shadows, onSelectBuilding }: { sho
       />
       <group position={[0, TERRAIN_LIFT, 0]}>
       <mesh position={[0, -TERRAIN_LIFT + 0.38, 0]} receiveShadow castShadow geometry={SOIL_GEOMETRY}>
-        <meshStandardMaterial color={night ? "#4a3429" : "#573722"} roughness={0.96} />
+        <meshStandardMaterial color={night ? "#385653" : "#5b7860"} roughness={0.83} />
       </mesh>
       <MossBanks night={night} />
       <TerrainHills seed={waterSeed} night={night} />

@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "commit": "357407c",
+  "files": {
+    "src/App.tsx": {
+      "before": "86adb48d1e288992cca5f84d215a2dd2c1b02f3feab07dfd80b7d618ca4ef123",
+      "after": "adc0f64bc489a2aadebc96349c07844b7e2106dc9f4108d9d3bd5c3da4b4f816"
+    },
+    "src/TerrainHills.tsx": {
+      "before": "c3d3a8a7419bc2e98d4f888542de21b112d35143719238e910a3d8207a8cae9c",
+      "after": "d9c60b296774d48a998e9cc1adb6cbd6a1840200e47fcc6dbac896e41ec0095a"
+    },
+    "src/WaterSurface.tsx": {
+      "before": "7db98f1f542ac74be1c0b7295d3d023ebc1c19a9ee6812f94a25de5e1ae8b0b2",
+      "after": "a5d00a37ad079a6d865f71afeaa8359d62c8c49e2b03c8076a7be4bec89f6b31"
+    },
+    "src/edenModels.ts": {
+      "before": "ecae8b3e8b94617c933ab43388edc98774b3277064c018cecd47aff312267763",
+      "after": "8883f03f624bb43775489709575afc6f45768f54343fb0cfe53986f1132e849e"
+    },
+    "src/TerrariumSky.tsx": {
+      "before": "c85da2edcf11940a6a56f26d9bbc0d9fca67587b9506bbf549252b4ae10643b0",
+      "after": "7494d956c484dc0e31ff53e474f7bed3d6a47bb0a2f8bb09691a47c908ef3730"
+    },
+    "src/AeroAtmosphere.tsx": {
+      "before": null,
+      "after": "81a044e30012e60ef8840c39e481191983345fcfe602aaf317d6115f15388f6c"
+    },
+    "src/AeroGlassMaterial.tsx": {
+      "before": null,
+      "after": "30e21d2147327d3de4fc0f5021f8a2b68762c968a260417747ab56825bae2de3"
+    }
+  },
+  "original_files": [
+    "src/App.tsx",
+    "src/TerrainHills.tsx",
+    "src/WaterSurface.tsx",
+    "src/edenModels.ts",
+    "src/TerrariumSky.tsx"
+  ],
+  "added_files": [
+    "src/AeroAtmosphere.tsx",
+    "src/AeroGlassMaterial.tsx"
+  ]
+}

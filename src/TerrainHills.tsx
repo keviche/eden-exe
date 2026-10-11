@@ -7,6 +7,7 @@ import {
   DodecahedronGeometry,
   SphereGeometry,
   MeshStandardMaterial,
+  MeshBasicMaterial,
   InstancedMesh,
   Object3D
 } from "three";
@@ -105,7 +106,7 @@ function TerrainDetailInstances({
   night
 }: {
   instances: DetailInstance[];
-  kind: "grass" | "moss" | "stone";
+  kind: "grass" | "moss" | "stone" | "dew";
   night: boolean;
 }) {
   const resources = useMemo(() => {
@@ -114,14 +115,19 @@ function TerrainDetailInstances({
         ? new ConeGeometry(0.045, 0.24, 3)
         : kind === "moss"
           ? new SphereGeometry(0.13, 6, 4)
-          : new DodecahedronGeometry(0.12, 0);
+          : kind === "dew"
+            ? new SphereGeometry(0.045, 8, 6)
+            : new DodecahedronGeometry(0.12, 0);
 
-    const material = new MeshStandardMaterial({
-      color: night ? "#b5d5c3" : "#ffffff",
-      roughness: 0.98,
-      metalness: 0,
-      flatShading: kind !== "moss"
-    });
+    // White-cyan dew is unlit so it can sparkle under the sun without bloom.
+    const material = kind === "dew"
+      ? new MeshBasicMaterial({ color: night ? "#90c9e2" : "#edffff" })
+      : new MeshStandardMaterial({
+          color: night ? "#a0d4c4" : "#ffffff",
+          roughness: kind === "grass" ? 0.73 : kind === "moss" ? 0.63 : 0.37,
+          metalness: kind === "stone" ? 0.11 : 0.02,
+          flatShading: kind === "stone"
+        });
 
     const mesh = new InstancedMesh(
       geometry,
@@ -159,6 +165,9 @@ function TerrainDetailInstances({
           0.22 * item.scale,
           item.scale
         );
+      } else if (kind === "dew") {
+        dummy.position.y += 0.13;
+        dummy.scale.setScalar(item.scale);
       } else {
         // Pebbles sit partially embedded in the soil.
         dummy.position.y += 0.035 * item.scale;
@@ -399,9 +408,11 @@ export default memo(function TerrainHills({
       const fine = noise(x * 7.0, z * 7.0);
 
       const variation =
-        (broad - 0.5) * 0.22 +
-        (medium - 0.5) * 0.16 +
-        (fine - 0.5) * 0.09;
+        (broad - 0.5) * 0.18 +
+        (medium - 0.5) * 0.13 +
+        (fine - 0.5) * 0.045;
+      const sunlightPatch = Math.sin(x * 0.29 + seed * 0.008) *
+        Math.cos(z * 0.23 + 0.75) * 0.025;
 
       const wetness =
         1 - smoothstep(0.15, 1.65, waterDistance);
@@ -417,22 +428,21 @@ export default memo(function TerrainHills({
       const exposedSoil =
         smoothstep(0.25, 0.85, slope) * 0.55;
 
-      // Vibrant grass with subtle natural variation.
-      let r = 0.105 + variation * 0.55;
-      let g = 0.57 + variation;
-      let b = 0.19 + variation * 0.45;
+      // Electric spring greens, soft cyan in damp hollows, and lighter sun patches.
+      let r = 0.17 + variation * 0.39 + sunlightPatch * 0.6;
+      let g = 0.71 + variation * 0.74 + sunlightPatch;
+      let b = 0.095 + variation * 0.31;
 
-      // Blend brown soil into steeper areas.
-      r = r * (1 - exposedSoil) + 0.34 * exposedSoil;
-      g = g * (1 - exposedSoil) + 0.25 * exposedSoil;
-      b = b * (1 - exposedSoil) + 0.13 * exposedSoil;
+      // Shallow slopes still read as verdant: avoid muddy brown cliffs.
+      r = r * (1 - exposedSoil) + 0.27 * exposedSoil;
+      g = g * (1 - exposedSoil) + 0.49 * exposedSoil;
+      b = b * (1 - exposedSoil) + 0.16 * exposedSoil;
 
-      // Darken terrain around water.
-      const damp = wetness * 0.30;
-
-      r *= 1 - damp;
-      g *= 1 - damp;
-      b *= 1 - damp * 0.5;
+      // Cyan-green shores echo the surrounding glass and turquoise water.
+      const damp = wetness * 0.35;
+      r = r * (1 - damp) + 0.09 * damp;
+      g = g * (1 - damp) + 0.63 * damp;
+      b = b * (1 - damp) + 0.28 * damp;
 
       return [
         Math.max(0, Math.min(1, r)),
@@ -519,28 +529,33 @@ export default memo(function TerrainHills({
       scale: number; rotation: number; color: Color;
     }> = [];
 
+    const dewPositions: Array<{
+      x: number; y: number; z: number;
+      scale: number; rotation: number; color: Color;
+    }> = [];
+
     const terrainHalf = BOARD_SIZE * 0.48;
 
     const grassPalette = [
-      "#48c96a",
-      "#3db85a",
-      "#66d979",
-      "#299c55",
-      "#78d987"
+      "#7fec54",
+      "#53d85c",
+      "#9bfa64",
+      "#31b866",
+      "#b3fb7a"
     ];
 
     const mossPalette = [
-      "#248e53",
-      "#39aa61",
-      "#56b96c",
-      "#2d995c"
+      "#2caf69",
+      "#50d987",
+      "#7ee9a0",
+      "#28bd7d"
     ];
 
     const stonePalette = [
-      "#879e8d",
-      "#9aa99a",
-      "#788e82",
-      "#b0b6a3"
+      "#bbebe0",
+      "#d3f5e9",
+      "#82cabe",
+      "#edfdf7"
     ];
 
     function pickColor(palette: string[]) {
@@ -678,11 +693,26 @@ export default memo(function TerrainHills({
       });
     }
 
+    // A few pearl-blue dew beads among the existing grass (no additional draw calls
+    // per bead; all droplets share an instanced mesh and a small sphere geometry).
+    for (let i = 0; i < 130; i++) {
+      const x = (detailRandom() * 2 - 1) * terrainHalf;
+      const z = (detailRandom() * 2 - 1) * terrainHalf;
+      if (distanceFromWater(x, z) < 0.9 || terrainSlope(x, z) > 0.55) continue;
+      dewPositions.push({
+        x, y: 0.012 + heightAt(x, z), z,
+        scale: 0.65 + detailRandom() * 1.25,
+        rotation: 0,
+        color: pickColor(["#ffffff", "#b8faff", "#eafffd", "#bcdfff"]),
+      });
+    }
+
     return {
       geometry,
       grassPositions,
       mossPositions,
-      stonePositions
+      stonePositions,
+      dewPositions
     };
 
   }, [seed]);
@@ -699,10 +729,10 @@ export default memo(function TerrainHills({
       raycast={() => null}
     >
       <meshStandardMaterial
-        color={night ? "#a0c4b0" : "#ffffff"}
+        color={night ? "#92bdb8" : "#ffffff"}
         vertexColors
-        roughness={0.92}
-        metalness={0}
+        roughness={0.74}
+        metalness={0.02}
         side={2}
       />
     </mesh>
@@ -722,6 +752,12 @@ export default memo(function TerrainHills({
     <TerrainDetailInstances
       instances={terrain.stonePositions}
       kind="stone"
+      night={night}
+    />
+
+    <TerrainDetailInstances
+      instances={terrain.dewPositions}
+      kind="dew"
       night={night}
     />
     </>

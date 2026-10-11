@@ -149,8 +149,8 @@ class Builder {
 
 function planter(b: Builder, at: Vec3, size = 0.18) {
   b.group(at, [0, 0, 0], [size, size, size], () => {
-    b.box([1, 0.65, 1], [0, 0.325, 0], "#c58d68");
-    b.box([1.12, 0.14, 1.12], [0, 0.65, 0], "#dfb18b");
+    b.box([1, 0.65, 1], [0, 0.325, 0], "#7fcece");
+    b.box([1.12, 0.14, 1.12], [0, 0.65, 0], "#d7fffc");
     b.foliage([-0.2, 1.02, 0], 0.64, "#4f9d68");
     b.foliage([0.2, 1.05, 0.1], 0.6, "#82bf76");
   });
@@ -167,10 +167,10 @@ function solarPanel(b: Builder, at: Vec3, width: number, depth: number, tilt = 0
 
 function windowPane(b: Builder, at: Vec3, yaw: number, width = 0.34, height = 0.36) {
   b.group(at, [0, yaw, 0], [1, 1, 1], () => {
-    b.box([width + 0.065, height + 0.065, 0.04], [0, 0, 0], "#f4d693");
-    b.box([width, height, 0.012], [0, 0, 0.027], "#70e5f3", [0, 0, 0], "glass");
-    b.box([0.018, height, 0.018], [0, 0, 0.038], "#fff2cb");
-    b.box([width + 0.1, 0.035, 0.095], [0, -height / 2 - 0.03, 0.015], "#fff2cb");
+    b.box([width + 0.065, height + 0.065, 0.04], [0, 0, 0], "#edfffa");
+    b.box([width, height, 0.012], [0, 0, 0.027], "#76dcf5", [0, 0, 0], "glass");
+    b.box([0.018, height, 0.018], [0, 0, 0.038], "#f5fffb");
+    b.box([width + 0.1, 0.035, 0.095], [0, -height / 2 - 0.03, 0.015], "#f5fffb");
   });
 }
 
@@ -178,7 +178,7 @@ function facade(b: Builder, width: number, depth: number, floors: number, floorH
   const height = floors * floorHeight;
   b.box([width, height, depth], [0, base + height / 2, 0], wallColor);
   for (const x of [-1, 1]) for (const z of [-1, 1]) {
-    b.box([0.05, height, 0.05], [x * width / 2, base + height / 2, z * depth / 2], "#f1ecdc");
+    b.box([0.05, height, 0.05], [x * width / 2, base + height / 2, z * depth / 2], "#bce9e9");
   }
   const columns = Math.max(2, Math.min(4, Math.floor(width / 0.65)));
   const sideColumns = Math.max(1, Math.min(3, Math.floor(depth / 0.65)));
@@ -193,15 +193,15 @@ function facade(b: Builder, width: number, depth: number, floors: number, floorH
       const z = (column - (sideColumns - 1) / 2) * depth / (sideColumns + 0.7);
       for (const side of [-1, 1]) windowPane(b, [side * (width / 2 + 0.012), y, z], side * Math.PI / 2);
     }
-    if (floor > 0) b.box([width + 0.04, 0.045, depth + 0.04], [0, base + floor * floorHeight, 0], "#ecedda");
+    if (floor > 0) b.box([width + 0.04, 0.045, depth + 0.04], [0, base + floor * floorHeight, 0], "#dcfff4");
   }
   return base + height;
 }
 
 function entrance(b: Builder, width: number, depth: number, stage: number) {
   const front = depth / 2;
-  b.box([0.48, 0.76, 0.05], [0, 0.48, front + 0.025], "#9c583b");
-  b.box([0.37, 0.66, 0.025], [0, 0.44, front + 0.06], "#d99c62");
+  b.box([0.48, 0.76, 0.05], [0, 0.48, front + 0.025], "#319eb3");
+  b.box([0.37, 0.66, 0.025], [0, 0.44, front + 0.06], "#9beded");
   b.add("sphere", [0, 0.83, front + 0.044], [0.27, 0.27, 0.055], "#fff0c1");
   b.add("sphere", [0, 0.84, front + 0.093], [0.205, 0.21, 0.022], "#ffc96b", [0, 0, 0], "glass");
   b.box([0.22, 0.27, 0.015], [0, 0.54, front + 0.112], "#fff0a7", [0, 0, 0], "glass");
@@ -212,11 +212,11 @@ function entrance(b: Builder, width: number, depth: number, stage: number) {
 }
 
 function flatRoof(b: Builder, width: number, depth: number, y: number) {
-  b.box([width + 0.14, 0.08, depth + 0.14], [0, y + 0.02, 0], "#fff1c4");
-  b.box([width, 0.045, depth], [0, y + 0.08, 0], "#69c65c");
+  b.box([width + 0.14, 0.08, depth + 0.14], [0, y + 0.02, 0], "#f5fffa");
+  b.box([width, 0.045, depth], [0, y + 0.08, 0], "#5bdfb6");
   for (const side of [-1, 1]) {
-    b.box([width + 0.12, 0.1, 0.06], [0, y + 0.11, side * (depth / 2 + 0.025)], "#fff0bf");
-    b.box([0.06, 0.1, depth + 0.1], [side * (width / 2 + 0.025), y + 0.11, 0], "#fff0bf");
+    b.box([width + 0.12, 0.1, 0.06], [0, y + 0.11, side * (depth / 2 + 0.025)], "#d7ffff");
+    b.box([0.06, 0.1, depth + 0.1], [side * (width / 2 + 0.025), y + 0.11, 0], "#d7ffff");
   }
 }
 
@@ -237,7 +237,7 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
   const floors = Math.min(MAX_BUILDING_FLOORS, Math.max(1, Math.round(floorsOverride ?? (1 + (config.floors - 1) * stage / 2))));
   
   // Foundation pad
-  b.box([width + 0.1, base, depth + 0.1], [0, base / 2, 0], "#acb6a4");
+  b.box([width + 0.1, base, depth + 0.1], [0, base / 2, 0], "#b2e9df");
 
   // --- GLASS-HEAVY STREAMLINE MODERNE WITH TOP GLASS DOME FOR SOLAR HOUSE ---
   if (variant === "solar-house") {
@@ -251,8 +251,8 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
       b.add("cylinder", [0, y + floorHeight / 2, 0], [radius, floorHeight, radius], "#70e5f3", [0, 0, 0], "glass");
       
       // Teal tile wainscoting band around the bottom of each floor
-      b.add("cylinder", [0, y + 0.10, 0], [radius * 1.01, 0.20, radius * 1.01], "#35a79c");
-      b.add("cylinder", [0, y + 0.20, 0], [radius * 1.02, 0.04, radius * 1.02], "#d0ecea"); // Chrome trim line
+      b.add("cylinder", [0, y + 0.10, 0], [radius * 1.01, 0.20, radius * 1.01], "#36ccc1");
+      b.add("cylinder", [0, y + 0.20, 0], [radius * 1.02, 0.04, radius * 1.02], "#f4ffff"); // Chrome trim line
 
       // Wrap-around ribbon windows
       for (let face = 0; face < 4; face++) {
@@ -292,7 +292,7 @@ function buildBuilding(variant: string, width: number, depth: number, stage: num
   }
 
   // --- FALLBACK LOGIC FOR ALL OTHER BUILDING VARIANTS ---
-  const colors = ["#e8bd7d", "#f2d49a", "#c98f5e", "#f5e0b1"];
+  const colors = ["#e7fff8", "#d1f6ef", "#c9f5ff", "#f3fff5"];
   const wallColor = colors[seed % colors.length]!;
 
   if (variant === "garden-pavilion") {

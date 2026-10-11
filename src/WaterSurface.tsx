@@ -110,8 +110,8 @@ void main() {
     wave2 * 0.025 +
     wave3 * 0.015;
 
-  vec3 deepWater = vec3(0.035, 0.49, 0.66);
-  vec3 clearWater = vec3(0.055, 0.75, 0.83);
+  vec3 deepWater = vec3(0.016, 0.36, 0.69);
+  vec3 clearWater = vec3(0.05, 0.84, 0.85);
 
   float blend = clamp(
     0.58 + movement,
@@ -141,9 +141,22 @@ void main() {
 
   color += vec3(0.015, 0.025, 0.025) * softLight;
 
-  color += vec3(0.015, 0.025, 0.03) * vSurfaceSlope;
+  color += vec3(0.018, 0.035, 0.04) * vSurfaceSlope;
+
+  // Soft caustic ribbons and sharp occasional glitter, no reflections render pass.
+  float caustic = pow(max(0.0, sin(p.x * 3.7 + t * 0.45) *
+    cos(p.y * 4.8 - t * 0.52)), 7.0);
+  float specular = pow(max(0.0, sin(p.x * 9.3 + p.y * 3.2 + t * 0.7) *
+    sin(p.y * 6.1 - p.x * 2.7 - t * 0.43)), 24.0);
+  float viewRim = pow(1.0 - abs(dot(normalize(cameraPosition - vWorldPosition),
+    vec3(0.0, 1.0, 0.0))), 3.0);
+  color += vec3(0.09, 0.22, 0.2) * caustic * 0.28;
+  color += vec3(0.66, 0.9, 1.0) * specular * 0.45;
+  color += vec3(0.03, 0.11, 0.15) * viewRim * 0.32;
 
   gl_FragColor = vec4(color, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 
