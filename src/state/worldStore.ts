@@ -223,8 +223,12 @@ function fillOpenLand(input: WorldState, at: number): WorldState {
   
   // Relocate saved trees whose mature canopies intersect
   // nearby buildings, without changing building positions.
+  const waterPlacement = createWaterPlacement(world.waterSeed ?? 1);
   const repairedPlants = [...world.plants];
-  const structures = [...world.buildings, ...world.residents];
+  const structures = [
+    ...world.buildings,
+    ...residentOccupiedPlots(world.residents),
+  ];
 
   for (let i = 0; i < repairedPlants.length; i++) {
     const plant = repairedPlants[i];

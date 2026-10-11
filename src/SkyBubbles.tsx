@@ -11,7 +11,6 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
   SphereGeometry,
 } from "three";
 
